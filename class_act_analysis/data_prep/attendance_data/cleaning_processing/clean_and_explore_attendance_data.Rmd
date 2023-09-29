@@ -1,0 +1,403 @@
+---
+title: "exploring_individual_data"
+author: "Sam Relins"
+date: '2022-07-11'
+output: html_document
+---
+
+<!-- Summary: Exploration, cleaning and transformation of latest version of attendance data provided by Bradford Council IMT. Cleaning and transformation script extracted to stand-alone R file `clean_and_anonymise_attendance.R` -->
+
+```{r}
+library(tidyverse)
+library(stringr)
+library(foreach)
+library(doParallel)
+library(gridExtra)
+setwd("~/Documents/BIHR/class_act/")
+```
+
+```{r}
+raw_attendance <- read_csv("data/raw_attendance_sep_2021_jun_2022.csv") %>%
+    select(School, WeekStart, WeekMarks)
+```
+
+## Fill in missing characters in attendance strings
+
+Some strings < 14 chars long. Fill the missing chars according to the following rules:
+
+    * Some strings are 10 chars long, and so are clearly missing the weekend planned closure chars ("####"). If the string is 10 chars long and doesn't contain any "#"s then add "####" to the end of the string
+    * Some strings are 11-13 chars long ending with one or more "#" - assumption is that there are simply a few missing "#" - add the requisite number of "#"s to make the string up to 14
+    * Any remaining, add "_"s to represent missing strings that can't be inferred as "#"s 
+
+```{r}
+add_missing_att_chars <- function(att_string) {
+    if (is.na(att_string)) {
+        output <- "______________"
+    } else if (nchar(att_string) == 14) {
+        output <- att_string
+    } else if (nchar(att_string) == 10 & str_count(att_string, "#") == 0) {
+        output <- paste(att_string, "####", sep="")
+    } else if (nchar(att_string) > 10 & str_sub(att_string, start=-1) == "#") {
+        tail_chars <- str_dup("#", 14 - nchar(att_string))
+        output <- paste(att_string, tail_chars, sep="")
+    } else {
+        tail_chars <- str_dup("_", 14 - nchar(att_string))
+        output <- paste(att_string, tail_chars, sep="")
+    }
+    return(output)
+}
+
+correct_att_vector <- function(att_vector) {
+    output <- foreach(i=1:length(att_vector)) %do% 
+        add_missing_att_chars(att_vector[i])
+    return(unlist(output))
+}
+
+registerDoParallel(8)
+raw_attendance <- raw_attendance %>% 
+    mutate(att_string = correct_att_vector(WeekMarks))
+stopImplicitCluster()
+```
+
+## Aggregate records by School/Week
+
+* Sum over columns that count different attendance types
+* paste attendance strings into one long string to process
+
+```{r}
+attendance <- raw_attendance %>%  
+    group_by(School, WeekStart) %>% 
+    summarise(pupils = n(),
+              att_string = paste(att_string, collapse=""))
+```
+
+## Illness columns FYI
+
+Illness column a bit funny - rule seems to be:
+    - `*Illness` is all the "=" (I01 - Illness not covid) sessions
+    - `Illness Confirmed Coronavirus` is all the ";" (I02 - confirmed covid) 
+    - `Illness` is a sum of all the "I"/";"/"=" sessions
+    
+## Count attendance chars
+
+* count over chars and populate columns headed with absence codes
+
+```{r}
+att_chars <- c(
+    "_", "-", ";", "\\(", "\\)", "\\[", "\\]", "\\{", "\\}", "\\*", "/", "\\\\",
+    "#", "^", "\\+", "=", "B", "C", "D", "E", "G", "H", "I", "J", "L", "M", "N", 
+    "O", "P", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"
+)
+
+char_descriptions <- c(
+    "Unk", "Unk", "I02", "X02", "Unk", "Unk", "X09", "X06", "X07", "Unk", "am", 
+    "pm","#", "X08", "X01", "I01", "B", "C", "D", "E", "G", "H", "I", "J", "L", 
+    "M", "N", "O", "P", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"
+)
+
+unique_descriptions <- unique(unlist(char_descriptions))
+for (description in unique_descriptions) {
+    attendance[description] <- 0
+}
+
+for (i in 1:length(att_chars)) {
+    char <- att_chars[i]
+    char_count <- str_count(attendance$att_string, char)
+    desc <- char_descriptions[i]
+    attendance[desc] <- attendance[desc] + char_count 
+}
+```
+
+## Tidy remaining data
+
+* Shorten School names
+* add different study arms
+* Format week start column as date
+
+```{r}
+attendance <- attendance %>% 
+  mutate(WeekStart = as.Date(WeekStart, format="%d/%m/%y"))
+drop_schools <- c("Margaret McMillan Primary School", 
+                  "Beckfoot Priestthorpe Primary School & Nursery")
+
+attendance <- attendance %>%  
+    filter(!(School %in% drop_schools))
+  
+attendance$arm <- "None" 
+arm1 = c(
+  "Horton Grange Primary School", "Bradford Academy", 
+  "Cavendish Primary School", "St Matthew's Catholic Primary School", 
+  "Farnham Primary School", "St Joseph's Catholic Primary School (Bingley)", 
+  "Green Lane Primary School", "Westbourne Primary School", 
+   "Beckfoot Nessfield"
+)
+attendance[attendance$School %in% arm1, "arm"] <- "Control" 
+arm2 = c(
+  "Eastwood Community School", "Shirley Manor Primary School",  
+  "Swain House Primary School", "Bowling Park Primary School", 
+  "Burley and Woodhead CofE Primary School", "Crossflatts Primary School", 
+  "Copthorne Primary School", "St Columba's Catholic Primary School", 
+  "St Joseph's Catholic Primary School (Bradford)", 
+  "St William's Catholic Primary School"
+)
+attendance[attendance$School %in% arm2, "arm"] <- "HEPA" 
+
+arm3 <- c(
+  "Grove House Primary School", "The Academy At St. James", 
+  "Newby Primary School", "Addingham Primary School", 
+  "Clayton Village Primary School", "Riddlesden St Mary's CofE Primary School",  
+  "Saltaire Primary School")
+arm3_activation_dates <- as.Date(c(
+    "2021-12-12", "2021-12-12", "2021-12-12", "2021-12-12", "2022-02-13", 
+    "2022-03-20", "2022-03-20"
+))
+arm_3_missing <- c(
+  "Thackley Primary School",   "St Paul's CofE Primary School",  
+  "Sandal Primary School"
+)
+for (i in 1:length(arm3)) {
+    school_mask = attendance$School == arm3[i]
+    date_mask = attendance$WeekStart > arm3_activation_dates[i]
+    is_uvc = school_mask & date_mask
+    attendance[is_uvc, "arm"] <- "UVC" 
+}
+attendance[attendance$arm == "None", "arm"] <- "Control" 
+
+attendance <- attendance %>% mutate(HEPA = arm == "HEPA",
+                                    UVC = arm == "UVC")
+attendance <- attendance %>% 
+  mutate(School = replace(School, 
+                          School == "St Joseph's Catholic Primary School (Bingley)",  
+                          "St Joseph's Bingley")) %>%
+  mutate(School = replace(School, 
+                          School == "St Joseph's Catholic Primary School (Bradford)",  
+                          "St Joseph's Bradford")) %>% 
+  mutate(School = replace(School, 
+                          School == "The Academy At St. James",  
+                          "Academy At St.James"))
+
+shorten_name <- function(name) {
+    words = unlist(strsplit(name, " "))
+    if(length(words) >= 3) {
+      paste(words[1:3], collapse=" ")
+    } else {
+      paste(words, collapse=" ")
+    }
+}
+
+attendance <- attendance %>%
+  mutate(School = sapply(School, shorten_name))
+
+attendance <- attendance %>% select(-att_string)
+```
+
+## Add figures for present in school and illness absence
+
+```{r}
+in_school_codes = c("am", "pm", "L", "U")
+illness_codes = c("I", "I01", "I02", "X02")
+attendance <- attendance %>% 
+    mutate(in_school = rowSums(across(in_school_codes)),
+           ill = rowSums(across(illness_codes))) %>% 
+    mutate(pct_in_school = in_school / (pupils * 14 - `#`),  
+           prop_absent_ill = ill /in_school ) %>%
+    replace(is.na(.), 0)
+```
+
+```{r}
+attendance %>% group_by(School) %>% count()
+```
+```{r}
+write_csv(attendance, "~/Documents/BIHR/class_act/data/checkpoints/attendance_ckpt_9_dec_22.csv")
+```
+
+Load in anonymisation codes and link with data:
+
+```{r}
+school_codes <- read_csv("~/Documents/BIHR/class_act/data/school_keys.csv") %>%
+    select(School_AnonID_old, School, msoa)  %>% 
+    drop_na() 
+anon_attendance <- left_join(attendance, school_codes, by="School") %>%
+    rename(closed = `#`, School_AnonID = School_AnonID_old)
+```
+```{r}
+anon_attendance %>% group_by(School_AnonID) %>% count()
+```
+
+```{r}
+anon_attendance %>% 
+    ungroup() %>% 
+    relocate(School_AnonID, msoa) %>% 
+    select(-School) %>% 
+    write_csv("~/Documents/BIHR/class_act/data/checkpoints/anon_attendance_ckpt_9_dec.csv")
+```
+
+## School Closures
+
+find any dates where attendance is zero
+
+```{r}
+attendance %>% filter(pct_in_school == 0) %>% group_by(WeekStart) %>% count()
+```
+remove school/weeks for closures:
+
+```{r}
+attendance <- attendance %>% filter(pct_in_school > 0)
+```
+
+## Errors
+
+plenty of errors - particularly in last week of data - probably due to lack of QA
+drop that week
+
+```{r}
+attendance <- attendance %>% filter(WeekStart != max(WeekStart)) 
+```
+
+```{r}
+attendance %>% 
+    filter(Unk > 0) %>% 
+    mutate(pct_unk = Unk / (pupils *  14) * 100) %>%
+    select(WeekStart, School, Unk, pct_unk) %>% 
+    arrange(desc(pct_unk)) 
+```
+for now, bin any entries with > 1% missing data:
+
+```{r}
+attendance <- attendance %>% filter((Unk / (pupils *  14)) < 0.01) 
+```
+
+## Attendance Patterns
+
+Plot attendance by week
+
+```{r}
+(ggplot(data = attendance) 
+    + geom_point(mapping=aes(x=WeekStart, y=pct_in_school)))
+```
+
+definite break between attendance patterns pre-post 1st Nov 2021
+
+```{r}
+(ggplot(data = attendance %>% mutate(pre_nov = WeekStart < as.Date("2021-11-01"))) 
+    + geom_boxplot(mapping=aes(x=WeekStart, y=pct_in_school, color=pre_nov))
+    + geom_point(mapping=aes(x=WeekStart, y=pct_in_school, color = pre_nov),alpha=0.2))
+```
+Bradford Academy Seems to account for majority of outlying attendance
+
+```{r}
+(ggplot() 
+    + geom_smooth(data=attendance %>% 
+                     filter(School != "Bradford Academy"), 
+                 mapping=aes(x=WeekStart, y=pct_in_school))
+    + geom_point(data=attendance,
+                 mapping=aes(x=WeekStart, y=pct_in_school),
+                 color="blue",
+                 alpha=0.2)
+    + geom_line(data=attendance %>% 
+                     filter(School == "Bradford Academy"), 
+                 mapping=aes(x=WeekStart, y=pct_in_school),
+                 color="red"))
+```
+## Illness patterns 
+
+Plot illness by week
+
+```{r}
+(ggplot(data = attendance) 
+    + geom_point(mapping=aes(x=WeekStart, y=prop_absent_ill))
+    + geom_smooth(mapping=aes(x=WeekStart, y=prop_absent_ill)))
+```
+
+```{r}
+attendance %>% 
+           mutate(month_year = as.Date(format(attendance$WeekStart, "01-%m-%Y")))
+```
+```{r}
+attendance %>% 
+    mutate(month_year = as.Date(format(attendance$WeekStart, "%Y-%m-01"))) %>%
+    select(month_year)
+```
+
+```{r}
+library(gridExtra)
+plot_1 <- (ggplot(
+    data=attendance %>% 
+        mutate(month_year = as.Date(format(attendance$WeekStart, "%Y-%m-01")))
+    ) + geom_boxplot(mapping=aes(x=month_year,  
+                                 y=prop_absent_ill,  
+                                 color=arm,  
+                                 group=interaction(month_year, arm)), 
+                     outlier.shape=NA
+                   )
+    + scale_y_continuous(limits = c(0, 0.16))
+ )
+
+plot_2 <- (ggplot(data = attendance)  
+           + geom_smooth(mapping=aes(x=WeekStart, y=prop_absent_ill, color=arm)))
+
+grid.arrange(plot_1, plot_2, nrow=2)
+```
+
+```{r}
+(ggplot(data = attendance ) 
+    + geom_point(mapping=aes(x=WeekStart, y=prop_absent_ill, color=arm))
+    + geom_smooth(mapping=aes(x=WeekStart, y=prop_absent_ill, color=arm)))
+```
+
+```{r, fig.width=3, fig.height=1}
+(ggplot(data = attendance) 
+    + geom_smooth(mapping=aes(x=WeekStart, y=prop_absent_ill, color=arm)))
+```
+
+```{r}
+plot_1 <- (ggplot(data=attendance)
+    + geom_boxplot(mapping=aes(x=WeekStart,  
+                                 y=prop_absent_ill,  
+                                 group=WeekStart),  
+                   outlier.shape=NA,
+                   color="darkblue"
+                   )
+    + scale_y_continuous(limits = c(0, 0.16))
+ )
+plot_1
+```
+```{r}
+attendance %>% filter(prop_absent_ill > 0.1) %>%
+    group_by(School) %>% count() %>% arrange(desc(n))
+```
+```{r}
+plot_schools = unlist(attendance %>%   
+                          filter(prop_absent_ill > 0.1) %>%   
+                          group_by(School)  %>%    
+                          count() %>%    
+                          filter(n > 1) %>%   
+                          select(School))
+length(plot_schools)
+```
+```{r}
+(ggplot() 
+    + geom_line(data = attendance %>% filter(School %in% plot_schools), 
+                mapping=aes(x=WeekStart, y=prop_absent_ill, color=School))
+    + geom_point(data = attendance %>% filter(!(School %in% plot_schools)), 
+                mapping=aes(x=WeekStart, y=prop_absent_ill)))
+```
+```{r}
+(ggplot() 
+    + geom_line(data = attendance %>% filter(School == "Bradford Academy"), 
+                mapping=aes(x=WeekStart, y=prop_absent_ill, color=School))
+    + geom_point(data = attendance %>% filter(!(School == "Bradford Academy")), 
+                mapping=aes(x=WeekStart, y=prop_absent_ill)))
+```
+
+```{r}
+(ggplot() 
+    + geom_line(data = attendance %>% filter(School == "Bradford Academy"), 
+                mapping=aes(x=WeekStart, y=prop_absent_ill, color=School))
+    + geom_point(data = attendance %>% filter(!(School == "Bradford Academy")), 
+                mapping=aes(x=WeekStart, y=prop_absent_ill)))
+```
+```{r}
+anon_attendance %>% filter(is.na(School_AnonID))
+```
+

@@ -1,0 +1,15 @@
+\begin{thebibliography}{1}
+
+\bibitem{eyfsp_handbook}
+Department~for Education.
+\newblock Early years foundation stage profile handbook.
+\newblock
+  https://www.gov.uk/government/publications/early-years-foundation-stage-profile-handbook,
+  Sep 2021.
+
+\bibitem{statsmodels}
+Skipper Seabold and Josef Perktold.
+\newblock {\em statsmodels: Econometric and statistical modeling with python}.
+\newblock 2010.
+
+\end{thebibliography}

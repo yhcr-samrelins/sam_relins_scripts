@@ -1,0 +1,225 @@
+---
+title: "ASD Exclusions Analysis"
+author: "Sam Relins"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: 
+    keep_tex: yes
+  html_document: default
+  word_document: default
+header-includes: \usepackage{float}
+                 \usepackage{amsmath}
+                 \usepackage{booktabs}
+                 \usepackage{caption}
+                 \captionsetup{font=footnotesize}
+---
+
+# Analysis & Methods
+
+This study aims to explore the association between ASD diagnoses and school exclusions and, in particular, any differences in rates of exclusion between individuals with diagnosed and undiagnosed cases of ASD. This was a retrospective data linkage study, using a cohort collated from the Connected Bradford Whole System Data Linkage Accelerator. The data used are taken from two primary sources: primary care data from the 86 general practices in the Bradford area for ADD OBSERVATION PERIOD, and Department for Education (DfE) data covering the school census and reported exclusions for ADD OBSERVATION PERIOD. Inclusion criteria were individuals appearing in both the DfE census and the Bradford Primary Care datasets, as these individuals can be reasonably assumed to have been under observation for both diagnoses of Autism Spectrum Disorders and exclusions in any academic year.
+
+Units of observation were the individual acadademic years of compulsory education (reception to year 11) for each person appearing in the education census data. ASD diagnoses are defined by the appearance one or more SNOMED read-codes for ASD diagnoses in their primary care record. A diagnosis date is estimated by the date at which the first ASD SNOMED code appears on an individual’s records. This diagnosis date is used to define a "pending" or "diagnosed" variable for each academic year. A confirmed diagnosis is a diagnosis date of ASD 6 months or more prior to the start date of the academic year in question, otherwise the diagnosis is recorded as pending - this six month figure is used to introduce period of time for schools to have made adjustments to accommodate an individual's diagnosis. The outcome of interest, an "excluded" variable, is defined as the presence of one or more records of an exclusion (temporary or permanent) for an individual in a given academic year.
+
+Logistic regression was used to estimate the affect of ASD diagnoses on the likelihood of exclusion. Individual persons were the unit of observation for the regression analyses, aggregated over the years of education for each individual. Given a clear distinction between the patterns of exclusison in the primary and secondary levels of education (Figure XXXX), two separate models of exclusion were proposed. A "primary school" model aggregated for each person over all the school years Reception to year 6, and a "secondary school model" aggregated over the years 7-11. A binary indicator of exclusions (Excluded/Not Excluded) was modelled as a function of a person's ``diagnosis status'' for ASD: No diagnosis (reference category), pending diagnosis and confirmed diagnosis. The aggregated observations for the logistic regression were defined as follows:
+
+* **Excluded**: One or more exclusions in the academic years aggregated
+* **No Diagnosis**: No diagnosis of ASD in an individual's primary care record
+* **Pending Diagnosis**: A diagnosis status of pending in the academic year in which an exclusion is observed, or a diagnosis status of pending for all the academic years aggregated if no exclusions are observed,.
+* **Confirmed Diagnosis**: A diagnosis status of confirmed in any of the academic years aggregated, excluding examples where an exclusion was observed when a diagnosis was pending.
+
+A significant proportion of the individuals in the cohort had missing data for one or more of the years of their compulsory education (reception to year 11). Analyses of these missing observations suggested that these data were not missing at random, and that a dependence relationship existed between these missing years of eduation and the viariables of interest, ASD diagnoses and exclusions. To account for this relationship, a further set of inclusion criteria were introduced: only individuals with all available years of education at either the primary, secondary or both levels of education were included in the cohort. Further discussion of missing data, including a description of the dependence relationships between missing data and the variables of interest, can be found in the supplimentary material.
+
+# Results
+
+Table \ref{fig:table_1} and Figure \ref{fig:excl_pcts} show the total counts and proportions of exclusions and ASD diagnoses by academic year. There is a clear change in the pattern of exclusions between the years of primary education (reception to year 6) and secondary education (years 7 to 11). Exclusions in the primary years follow a slowly increasing trajectory, then in the secondary years the rate of exclusion increases sharply reaching a peak in year 10 and then falling in year 11. As expected, autism diagnoses increase over the years of education with a corresponding decline in pending diagnoses. The proportions of pending and diagnosed ASD cases fall from year 6 to year 7 on the basis of the inclusion criteria for the cohort, see SUPPLIMENTARY MATERIAL for further information.
+
+
+\begin{table}[H]
+\centering
+\renewcommand*{\arraystretch}{1.2}
+\begin{scriptsize}\begin{tabular}{llllll}
+\\
+\toprule
+\textbf{Academic Year} & \textbf{Total} & \multicolumn{3}{l}{\textbf{ASD Diagnosis (\%)}} & \textbf{Excluded (\%)} \\
+ & & None & Pending & Diagnosed & \\
+\midrule
+Reception &	111958 & 109991	(98.24) & 1853 (1.66) & 114 (0.10) & 61 (0.05) \\
+Year 1 & 111835 & 109896 (98.27) & 1731 (1.55) & 208 (0.19) & 152 (0.14) \\
+Year 2 & 111710 & 109774 (98.27) & 1626 (1.46) & 310 (0.28) & 222 (0.20) \\
+Year 3 & 111613 & 109686 (98.27) & 1523 (1.36) & 404 (0.36) & 468 (0.42) \\
+Year 4 & 111637 & 109704 (98.27) & 1416 (1.27) & 517 (0.46) & 725 (0.65) \\
+Year 5 & 111635 & 109695 (98.26) & 1304 (1.17) & 636 (0.57) & 1078 (0.97) \\
+Year 6 & 111676 & 109738 (98.26) & 1186 (1.06) & 752 (0.67) & 1342 (1.20) \\
+Year 7 & 129538 & 127996 (98.81) & 1054 (0.81) & 488 (0.38) & 3116 (2.41) \\
+Year 8 & 129630 & 128092 (98.81) & 940 (0.73) & 598 (0.46) & 5449 (4.20) \\
+Year 9 & 129489 & 127949 (98.81) & 857 (0.66) & 683 (0.53) & 7670 (5.92) \\
+Year 10 & 129743 & 128207 (98.82) & 734 (0.57) & 802 (0.62) & 9424 (7.26) \\
+Year 11 & 129602 & 128058 (98.81) & 642 (0.50) & 902 (0.70) & 6774 (5.23) \\
+\bottomrule
+\end{tabular}\end{scriptsize}
+\caption{Counts and percentages for the cohort by academic year. Percentages for ASD diagnoses and exclusions are reported as a percentage of the entire cohort.}
+\label{fig:table_1}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{plots/asd_excl_pcts.jpg}
+\caption{Proportions of the cohort that have an exclusion, an ASD diagnosis or a pending a diagnosis by academic year. Proportions are given as percentages of the whole cohort}
+\label{fig:excl_pcts}
+\end{figure}
+
+The trend of exclusions across the academic years can be seen in Figure \ref{fig:excl_pcts}, subdivided by ASD diagnosis status. Students with pending diagnoses had a consistently higher rate of exclusion than those without an ASD diagnosis, or those with a confirmed diagnosis of an ASD. Students with an ASD diagnosis had higher rates of exclusion than those with no diagnosis in primary school and up to year 8, and then lower rates of exclusion than thereafter.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{plots/excl_pcts_grouped.jpg}
+\caption{Proportions of cohort with an exclusion by academic year subdivided into ASD diagnosis status: No diagnosis (``None''), already diagnosed, or pending a diagnosis.}
+\label{fig:excl_pcts}
+\end{figure}
+
+Aggregated data for primary and secondary years can be seen in Table \ref{tab:table_2}. Overall rates of exclusion are higher in Secondary school (15.5\% of students excluded) than in primary (2.43\% of students excluded). Students with pending ASD diagnoses are excluded at the highest rates in both primary and secondary years (11.86\% and 25.18\% respectively). Students with a confirmed diagnosis of an ASD are excluded at a higher rate than those without an ASD diagnosis in primary school (4.21\% compared with 2.31%), but are excluded at a lower rate than those without a diagnosis in secondary school (9.68\% compared with 15.49\%). These trends match those seen in the yearly data (Figure \ref{fig:excl_pcts})
+
+\begin{table}[H]
+\centering
+\renewcommand*{\arraystretch}{1.2}
+\begin{scriptsize}\begin{tabular}{lllll}
+\toprule
+& \textbf{ASD Diagnosis} & \multicolumn{2}{l}{\textbf{Excluded (\%):}} & \textbf{Total} \\
+& & No & Yes & \\
+\midrule
+\textbf{Primary}: & & & & \\
+& None & 107171 (97.69) & 2536 (2.31) & 109707 \\
+& Pending & 1078 (88.14) & 145 (11.86) & 1223 \\
+& Diagnosed & 682 (95.79) & 30 (4.21) & 712 \\[1mm]
+& \textbf{Total:} & 108931 (97.57) & 2711 (2.43) & 111642 \\
+\textbf{Secondary}: & & & & \\
+& None & 108190 (84.51) & 19827 (15.49) & 128017 \\
+& Pending & 523 (74.82) & 176 (25.18) & 699 \\
+& Diagnosed & 756 (90.32) & 81 (9.68) & 837 \\[1mm]
+& \textbf{Total:} & 109469 (84.50) & 20084 (15.50) & 129553 \\
+\bottomrule
+\end{tabular}\end{scriptsize}
+\caption{Counts from aggregated primary (Reception to year 6) and sedcondary (year 7 to year 11) datasets subdivided by ASD diagnosis status and exclusions. Proportions are reported as those observed as excluded yes/no as a percentage of the ASD diagnosis subgroup.}
+\label{tab:table_2}
+\end{table}
+
+\begin{table}[H]
+\centering
+\begin{scriptsize}
+\begin{tabular}{lllllll}
+\toprule
+\multicolumn{7}{c}{\textbf{Logistic Regression Results:}} \\[1mm]
+\midrule\\
+\multicolumn{2}{l}{\hspace{1cm}\textbf{Formula:}} & \multicolumn{5}{l}{\textit{$Excluded \sim Pending Diagnosis + Diagnosed ASD$}} \\[1mm]
+\multicolumn{2}{l}{\hspace{1cm}\textbf{Model:}} & Logit & \multicolumn{2}{l}{\textbf{Method:}} & MLE & \\[1.5mm]
+\multicolumn{2}{l}{\textbf{Primary:}} & & & & & \\[1.5mm]
+\multicolumn{2}{l}{\hspace{1cm}\textbf{No. Observations:}} & 113811 & \multicolumn{2}{l}{\textbf{Df Residuals:}} & 113807 & \\[0.5mm]
+\multicolumn{2}{l}{\hspace{1cm}\textbf{Df Model:}} & 3 & \multicolumn{2}{l}{\textbf{Pseudo R\textsuperscript{2}:}} & 0.036 & \\[0.5mm]
+\multicolumn{2}{l}{\hspace{1cm}\textbf{Log-Likelihood:}} & -10244 & \multicolumn{2}{l}{\textbf{Ll-Null:}} & -10635 & \\[0.5mm]
+\multicolumn{2}{l}{\hspace{1cm}\textbf{LLR p-value:}} & \multicolumn{5}{l}{0.00} \\\\
+\multicolumn{2}{l}{\textbf{Secondary:}} & & & & & \\[1.5mm]
+\multicolumn{2}{l}{\hspace{1cm}\textbf{No. Observations:}} & 113811 & \multicolumn{2}{l}{\textbf{Df Residuals:}} & 113807 & \\[0.5mm]
+\multicolumn{2}{l}{\hspace{1cm}\textbf{Df Model:}} & 3 & \multicolumn{2}{l}{\textbf{Pseudo R\textsuperscript{2}:}} & 0.036 & \\[0.5mm]
+\multicolumn{2}{l}{\hspace{1cm}\textbf{Log-Likelihood:}} & -10244 & \multicolumn{2}{l}{\textbf{Ll-Null:}} & -10635 & \\[0.5mm]
+\multicolumn{2}{l}{\hspace{1cm}\textbf{LLR p-value:}} & \multicolumn{5}{l}{0.00} \\\\
+\midrule\\
+& & \textbf{Odds (95\% CI)} & \textbf{Coef} & \textbf{Std Err} & \textbf{z} & \textbf{P\textless|z|} \\[1.5mm]
+\multicolumn{2}{l}{\textbf{Primary:}} & & & & & \\[1.5mm]
+\multicolumn{2}{l}{\hspace{0.5cm}\textbf{Intercept}} & \multicolumn{1}{c}{-} & -5.07 & 0.058 & -87.43 & 0.000 \\[0.5mm]
+\multicolumn{2}{l}{\hspace{0.5cm}\textbf{ASD Diagnosis:}} & & & & & \\
+& \hspace{0.5cm}No Diagnosis (Ref) & & & & & \\
+& \hspace{0.5cm}Pending Diagnosis & 3.36 (3.03, 3.71) & 1.21 & 0.05 & 23.37 & 0.000 \\
+& \hspace{0.5cm}Diagnosed & 3.36 (3.03, 3.71) & 1.21 & 0.05 & 23.37 & 0.000 \\\\
+\multicolumn{2}{l}{\textbf{Secondary:}} & & & & & \\[1.5mm]
+\multicolumn{2}{l}{\hspace{0.5cm}\textbf{Intercept}} & \multicolumn{1}{c}{-} & -5.07 & 0.058 & -87.43 & 0.000 \\[0.5mm]
+\multicolumn{2}{l}{\hspace{0.5cm}\textbf{ASD Diagnosis:}} & & & & & \\
+& \hspace{0.5cm}No Diagnosis (Ref) & & & & & \\
+& \hspace{0.5cm}Pending Diagnosis & 3.36 (3.03, 3.71) & 1.21 & 0.05 & 23.37 & 0.000 \\
+& \hspace{0.5cm}Diagnosed & 3.36 (3.03, 3.71) & 1.21 & 0.05 & 23.37 & 0.000 \\\\
+\bottomrule
+\end{tabular}
+\end{scriptsize}
+\caption{Statistics of the logistic regression of ASD diagnosis on ethnicity and sex. The baseline or reference individual is an asian female. "White" and "Other" denote the alternative ethnicity categories from the asian baseline.}
+\label{tab:log_reg_results}
+\end{table}
+
+\begin{table}[h]
+\centering
+\renewcommand*{\arraystretch}{1.2}
+\begin{scriptsize}\begin{tabular}{lllc}
+\toprule
+& \textbf{Coefficient} & \textbf{Odds} & \textbf{95\% CI} \\
+\midrule
+\textbf{Primary:} & & & \\
+& No Diagnosis & Baseline & - \\
+& Pending Diagnosis & 5.68 & (4.76, 6.79) \\
+& Diagnosed & 1.86 & (1.29, 2.69) \\ 
+\textbf{Secondary:} & & & \\
+& No Diagnosis & Baseline & - \\
+& Pending Diagnosis & 1.84 & (1.54, 2.18) \\
+& Diagnosed & 0.58 & (0.46, 0.74) \\ 
+\bottomrule
+\end{tabular}\end{scriptsize}
+\caption{Odds ratios and confidence intervals of the effects of pending or confirmed ASD diagnoses with comparison to a baseline of no diagnosis of ASD, as estimated by the logistic regression model specified in the methods.}
+\label{tab:model_summary}
+\end{table}
+
+At primary level, the regression modelling estimated that students with a pending diagnosis or confirmed diagnosis of ASD have higher odds of being excluded than students with no diagnosis at primary level (OR = 5.68 [95\%CI 4.76, 6.79] and OR = 1.86 [95\%CI 1.29, 2.69] respectively). At secondary level, the regression models estimated that students with a pending diagnosis again had higher odds of exclusion (OR = 1.84 [95\%CI 1.54, 2.18]), however students with a confirmed diagnosis had lower estimated odds of exclusion at secondary level (OR = 0.58 [95\%CI 0.46, 0.74])
+
+### Limitations:
+
+* Those without ASD read codes or entries in Exclusions table assumed not to have ASD/been excluded - absence doesn't necessarily mean data isn't missing 
+* inclusion criteria potentially bias those that are not excluded - excluded kids more likely to have missing records in census that lead to them being excluded from report
+* model poorly specified - comment on overall accuracy - need to consider confounders etc etc
+* more ASD diagnoses in recent years, fewer exclusions in recent years - this interacts with year group info - do exclusions increase controling for academic year?
+
+## Supplimentary Material:
+
+List of ASD SNOMEDS - Link to OpenSafely ASD list!
+
+## Missing Data 
+
+See hand-written notes! 
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{plots/missing_groups.jpg}
+\caption{Proportion of missing observations by academic year for whole cohort before the additional inclusion critera that restrict the cohort to individuals with limited missing data. Data are subdivided by individuals that appear at any point in the exclusions data, and individuals that appear in the ASD cohort. Academic years that would have taken place before or after the period of observation are not considered missing in these data.}
+\label{fig:missing_groups}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{plots/asd_props_all.jpg}
+\caption{Proportions of ASD diagnoses by academic year for the whole cohort before the additional inclusion criteria that ristrict the cohort to individuals with limited missing data. Gray bars represent the total proportion of those with a recorded ASD diagnosis, colored lines the proportions of those diagnoses that are pending or confirmed in that academic year.}
+\label{fig:asd_props_all}
+\end{figure}
+
+* ASD Diagnoses decrease as a proportion of overall data for each year as you go up academic years
+* Proportion of pending cases falls much faster than proportion of confirmed cases as you go up academic years - probably because kids diagnosed at a greater rate more recently 
+* Pattern of missing data different between exclusions cohort, ASD cohort and census cohort
+* overall cohort slowly declines through primary school then peaks y7 and declines back to baseline again - no real thoughts on this pattern
+* exclusions cohort declines smoothly to y-9 then increases sharply - exclusions are more frequent in data as you go up years so likelihood of you appearing in census increases as a functioin of increaseing academic years if you've been excluded - inverse pattern to exclusions over time in figure whatever
+* ASD missing data increses slowly across time - you're more likely to 
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{plots/asd_props_sub.jpg}
+\caption{Proportions of ASD diagnoses by academic year for the whole cohort after additional inclusion criteria that ristrict the cohort to individuals with limited missing data are imposed. Gray bars represent the total proportion of those with a recorded ASD diagnosis, colored lines the proportions of those diagnoses that are pending or confirmed in that academic year.}
+\label{fig:asd_props_sub}
+\end{figure}
+
+* after inclusion criteria applied pattern of missingness v similar between ASD/excluded/rest
+* proportions of ASD/pending diagnoses much more sensible, total proportion of ASD remains stable across primary and secondary - sudden change in y7 is function of inclusion criteria
+
+The patterns of missing data in the original cohort were examined, focusing on the variables related to ASD diagnosis and school exclusion. It was found that the proportion of missing data varied by academic year and by the individuals with ASD diagnoses and/or a history of school exclusion. Figure 1 shows the proportion of missing data by academic year for individuals with an ASD diagnosis (pending or confirmed) and for individuals with one or more exclusions on their academic records (fixed-term or permanent exclusions).
+
+The proportion of missing data varies as a function of academic year for all categories of ASD diagnosis, but the pattern of missing data is different for each of these categories. In the overall cohort, the missing data varies by academic year is relatively consistent, peaking in the first year of each level of education (primary/secondary) and then declining thereafter. The proportion of missing data ranges from XX\% in reception to XXX\% in year 6, and then peaks in year 7 at XX\% declining to XX\% in year 11. XXXX SOME COMMENT ON WHY XXXXX
+
+The proportion of missing data for students with an ASD diagnosis (pending or confirmed) follows a markedly different pattern, dropping sharply from reception to year 1, XX\% to XX\%, and then gradually increasing from this point, ranging from XX\% in year 2 to XX\% in year 11. These patterns likely reflect XXXXXXXX DO SOME MORE THINKING XXXXXXXXXX
+
+Missing data for individuals having been excluded at any point also differs from individuals with ASD and from the overall cohort. The proportion of missing data for students with no exclusion is relatively constant across academic years, ranging from 12.3\% in year 1 to 10.4\% in year 11. The proportion of missing data for students with at least one fixed-term exclusion decreases from 17.8\% in year 1 to 9.6\% in year 9, but then increases to 13.4\% in year 11. The proportion of missing data for students with at least one permanent exclusion also decreases from 23.4\% in year 1 to 10.7\% in year 9, but then increases to 16.8\% in year 11. These patterns suggest that school exclusions are more likely to occur or be recorded in later academic years, especially for students with permanent exclusions. 
+
+The different patterns of missing data between individuals with exclusions and individuals with ASD diagnoses indicate that the mechanisms underlying the missingness may not be the same for these two groups. Therefore, we need to account for the potential effects of missing data on our analyses and use appropriate methods to handle them. In the next section, we describe the methods we used to address the missing data problem and test the robustness of our results.
+
+One way to account for the missing data is to restrict the analysis to individuals who have complete data for all the variables of interest. Therefore, we applied additional inclusion criteria to our cohort that removed any individuals who had one or more missing values from either their primary school years (years 1 to 6) or secondary school years (years 7 to 11). This resulted in a final sample size of N individuals, with M individuals with ASD diagnosis and L individuals with exclusion. Table 1 shows the descriptive statistics of the final sample by ASD diagnosis and exclusion categories. This approach ensures that we have a complete dataset for our analyses, but it also reduces the sample size and may introduce selection bias if the missing data are not completely random. In the next section, we describe how we assessed the impact of this approach on our results and compared it with alternative methods to handle the missing data.

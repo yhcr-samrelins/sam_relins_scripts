@@ -1,0 +1,113 @@
+---
+title: "Master_CLASS-ACT"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Install / load required packages:
+library("pacman")
+pacman::p_load(ggplot2, lubridate, tidyfast, bigrquery, dplyr, tidyr,
+               DBI, dbplyr, RSQLite, gtools, latex2exp) 
+
+# Necessary to downgrade dbplyr to v2.1.1. Problems with compatibility when using newer versions 
+# Below command only needs to run once
+#remotes::install_version("dbplyr", "2.1.1")
+
+# Clear pre-existing environment variables:
+rm(list = ls())
+
+# Source necessary functions (stored in separate script)
+source("./aux_functions.R")
+
+```
+
+## Establish connection with BigQuery db
+
+```{r Connection}
+
+proj_id = "yhcr-prd-phm-bia-core"
+dataset_id = "CY_CLASS_ACT"
+
+con <- dbConnect(
+  bigrquery::bigquery(),
+  project = proj_id,
+  dataset = dataset_id,
+  #billing = #project_id_with_the_billing_source
+  #extended_types = TRUE
+)
+
+```
+
+## Load reference data for sensors
+
+```{r Load Ref}
+
+tbl_names <- dbListTables(con)
+#check_avail_YearWeek(con)
+
+staffr_flag <- readline(prompt="To load the staffroom db, enter '1' : ")
+
+# Load sensor info
+if (staffr_flag != '1'){
+  df_sensor_key <- con %>%
+    dplyr::tbl("df_sensor_key")
+  
+} else {
+  df_sensor_staffr_key <- con %>%
+    dplyr::tbl("df_sensor_staffr_key") 
+  
+}
+
+```
+
+##  Load IAQ data + clean up the database
+
+```{r Load IAQ}
+
+source("./aux_functions.R")
+
+if (staffr_flag != '1'){
+  df_AIRQ_RAW <- con %>%
+    dplyr::tbl("df_AIRQ") %>%
+    select(DateTime, School_ID, Classroom, CO2, PM2_5, PM10, Temp, Occupied) %>% 
+    mutate(DateTime = sql("TIMESTAMP_SECONDS(DateTime)")) # necessary to convert from UNIX time
+
+  # Clean up database from junk data
+  df_AIRQ <- filter_junk(df_AIRQ_RAW, df_sensor_key)
+  rm(df_AIRQ_RAW)
+
+} else {
+  df_AIRQ_staffr_RAW <- con %>%
+    dplyr::tbl("df_AIRQ_staffr") %>%
+    select(DateTime, School_ID, Classroom, CO2, PM2_5, PM10, Temp, Occupied) %>% 
+    mutate(DateTime = sql("TIMESTAMP_SECONDS(DateTime)")) # necessary to convert from UNIX time
+
+  # Clean up database from junk data
+  df_AIRQ_staffr <- filter_junk(df_AIRQ_staffr_RAW, df_sensor_staffr_key)
+  rm(df_AIRQ_staffr_RAW)
+
+}
+
+
+```
+
+##  Run stats
+
+```{r Stats}
+
+source("./aux_functions.R")
+
+stats_month_school <- stats_monthly(df_AIRQ, "School") #%>% collect()
+
+stats_week_school <- stats_weekly(df_AIRQ, "School") #%>% collect()
+
+stats_day_school <- stats_daily(df_AIRQ, "School") #%>% collect()
+
+
+
+
+```
+
+

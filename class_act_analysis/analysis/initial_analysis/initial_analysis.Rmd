@@ -1,0 +1,301 @@
+---
+title: "School Air Filtration Study - Initial Findings"
+author: "Sam Relins"
+date: '2022-07-15'
+output:
+    bookdown::pdf_document2:
+        fig_caption: yes
+        toc: false
+---
+
+<!--
+Summary: This notebook contains the script and documentation for the intial analysis of the effectiveness of ACTs in ClassAct Schools. The simple relationship between illness absences from school and the presence of different filters is studied. Issues with data quality and model assumptions result in these analyses being flawed, and have lead to most of these methods being revised and alternate results being produced in later work. In particular:
+
+* The data were later found to have errors and inconsistencies that were corrected, and so the descriptive statistics are not accurate
+* Though visually appealing, the LOESS curves in Figure 3 are based on default settings for ggplot, and are a somewhat arbitrary smooth curve through the mean illness ratios by week. The curves are not based on an interpretable or statistically sound model, and so shouldn't be considered reliable when interpreting the effects of either of the ACTs, or the absence of ACTs. 
+* The logistic regression model uses weekly data and assumes all observations are independent of one another, which isn't the case. There are inter-school dependencies and autocorrelations between near-term observations that aren't accounted for and so the variance estimates from the model (CIs ect) are not accurate.
+-->
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(stringr)
+library(foreach)
+library(doParallel)
+library(gridExtra)
+library(stargazer)
+attendance <- read_csv("~/Documents/BIHR/class_act/data/checkpoints/attendance_ckpt_20_jul.csv")
+attendance$prop_absent_ill <- attendance$prop_absent_ill * 100
+```
+```{r}
+attendance$prop_absent_ill
+```
+
+
+# Introduction 
+
+The effect a school environment has on the health of its students is of paramount importance, particularly in the wake of the COVID-19 pandemic. Of particular interest is the relationship between classroom air quality and the transmission of airborne infections, and any interventions that might mediate this relationship. This report aims to study the effect of classroom air filters on illness-related absences. We are using data from the Class-Act study schools: 31 primary schools fitted with air quality monitoring devices, and divided into one of 3 intervention arms - 10 schools fitted with HEPA air filters, 10 schools fitted with UVC air purifiers and 11 control schools. Attendance records for each of the schools in the study were provided by Bradford Council's Information Management Team (IMT), and are analysed to identify any relationship between air quality interventions and illness-related absences.
+
+# The Data
+
+## Data Preparation
+
+The dataset is composed of attendance records for each of the Class-Act schools spanning the period from the beginning of the 2021/2022 academic year to 4th July 2022. Bradford Council IMT provided raw attendance "codes" for each student (anonymised), detailing the one of 30+ attendance types for each of 14 weekly "sessions" (AM/PM, Monday-Sunday) as defined by DfE guidelines. These data were cleaned and aggregated into weekly attendance figures for each school, week and each of the recognised attendance types. The dataset was then labelled with the different arms of the Class-Act study: schools with HEPA/UVC air filters, and those without any filtration devices.
+
+Weeks in which schools were closed were removed from the data, as they contain no information about attendance, illness or otherwise. Furthermore, a minority of codes were "junk" or did not correspond to a recognised attendance type. Pending potential future data quality improvement efforts, school weeks with a 1% or greater proportion of "junk" sessions were removed from the dataset - 2.4% of the aggregated data after removing school closures (Table \ref{tab_1}) 
+
+\begin{table}[h]\centering
+\begin{tabular}{l|ll}
+                                & Affected Records & n     \\ \hline
+Aggregated Dataset              & -                & 1,271 \\
+School Closures                 & 160              & 1,111 \\
+\textgreater 1\% "Junk" Records & 27               & 1,084
+\end{tabular}
+  \caption{Number of records per school/week in the attendance data, and numbers of records removed in the data preparation process} 
+  \label{tab_1} 
+\end{table}
+
+### Attendance Measures
+
+Key data to determining the effect of classroom air quality on attendance are:
+
+1) The number of students present in school - we defined this as any of the following session types: "present AM" / "present PM" / "late arrival before register has closed" / "arrival after registration closed"
+2) The number of students absent from school because of illness - we defined this as any of the following session types: "illness" / "illness confirmed covid" / "self-isolating with coronavirus symptoms"*
+
+*Though we would have liked to study covid absences more specifically, ambiguities in the DfE guidelines on covid-related attendance records and the significant strain on resources resulting from the pandemic lead to numerous conflicting approaches to recording covid/non-covid absences.
+
+We defined our outcome measure as the ratio of students absent because of illness as a proportion of the students present in school for each week (percentage).
+
+### UVC filters
+
+Unlike the HEPA arm, schools in the UVC arm were not fitted with filters from the beginning of the 2021/2022 academic year, and the filters were not immediately active following installation. For the weeks in which the schools did not have an active UVC filter, they were considered part of the control arm. As a result, records of weeks in which UVC filtration was active are much lower in number than those for HEPA filtration/control arms can be seen in Figure \@ref(fig:armcounts) :
+
+```{r armcounts, echo=FALSE, warning=FALSE, fig.keep="all", fig.cap="Number of records each week divided by the intervention type. The proportion of UVC records increases gradually from December 2021 (and conversely the control proportion decreases) as schools began activating their UVC filtration devices"}
+(ggplot(attendance) 
+ + geom_bar(mapping=aes(x=WeekStart, color=arm))
+ + labs(x="Date", y="n Records")
+ + ggtitle("Counts of Records for Different Study Arms") 
+ + theme(plot.title = element_text(hjust = 0.5)))
+```
+
+# Methods
+
+We performed a basic descriptive analysis of the data, visualising the distribution of illness ratios across time and subdivided by the different air quality interventions - this included LOESS (Locally Estimated Scatterplot Smoothing) plots to identify the trend in illness rates over time across the different interventions. 
+
+We then modeled illness rates using logistic regression, to estimate the effects of the different air quality interventions. We performed a basic regression of illness rates as a function of the different air quality interventions to estimate total effects. We also produced a more descriptive model that accounted for the increases in illness related absences as the new year approached: our initial analysis of the illness rates showed a clear peak in infections in the new year, likely affected both by the wave of Omicron infections over the Christmas period and also seasonal increases in cold/flu viruses (Figure \@ref(fig:rates)). To reflect this peak, we fitted a regression model combining the different interventions with absolute proximity in days to 1st January 2022, in an effort to encode the effect of increased transmission of airborne illnesses as this wave rose and fell.
+
+```{r rates, echo=FALSE, warning=FALSE, fig.keep="all", fig.cap="Distribution of illness rates by week for the full dataset. Note the clear increase of infection rates to a peak in early January."}
+plot_1 <- (ggplot(data=attendance)
+    + geom_boxplot(mapping=aes(x=WeekStart,  
+                                 y=prop_absent_ill,  
+                                 group=WeekStart),  
+                   outlier.shape=NA,
+                   color="darkblue"
+                   )
+    + scale_y_continuous(limits = c(0, 16))
+    + labs(x="Date", y="Illness Ratio")
+     + ggtitle("Distribution of Illness Ratios by Week") 
+     + theme(plot.title = element_text(hjust = 0.5))
+ )
+plot_1
+```
+
+
+# Results & Discussion
+
+Our analyses showed a significant reduction in illness rates among the schools using HEPA air filters. Figure \@ref(fig:armrates) shows a clear peak in illness rates in December among the schools without any air filters and those with UVC filters; comparatively, illness rates in the schools using HEPA filters are relatively flat across the same period. This suggests the HEPA filters may be effective at mitigating person-to-person transmission of airbourne pathogens. As the spring and summer periods approach, the illness rates converge and little difference is seen between the different air quality interventions - this may result from greater ambient ventilation from windows/doors as outdoor temperatures rise throughout the year, and/or a reduction in transmission of airborne infections as overall illness in the population decrease.
+
+
+```{r armrates, echo=FALSE, warning=FALSE, fig.keep="all", message=FALSE, fig.cap="Box plots and LOESS smoothed curves for illness rates broken down by study arm. Note the peak of illness rates in December among the control/UVC arms whilst the HEPA arm remains flat."}
+plot_1 <- (ggplot(
+    data=attendance %>% 
+        mutate(month_year = as.Date(format(attendance$WeekStart, "%Y-%m-01")))
+    ) + geom_boxplot(mapping=aes(x=month_year,  
+                                 y=prop_absent_ill,  
+                                 color=arm,  
+                                 group=interaction(month_year, arm)), 
+                     outlier.shape=NA
+                   )
+    + scale_y_continuous(limits = c(0, 16))
+    + labs(x="", y="Illness Ratio")
+     + ggtitle("Distribution of Illness Ratios by Month and Study Arm") 
+     + theme(plot.title = element_text(hjust = 0.5))
+ )
+
+plot_2 <- (ggplot(data = attendance %>%
+                      filter(arm != "UVC")
+                  )  
+           + geom_smooth(mapping=aes(x=WeekStart, y=prop_absent_ill, color=arm)) 
+           + labs(x="", y="Illness Ratio") 
+           + ggtitle("LOESS Curves of Illness Ratio by Date: HEPA vs Control")  
+           + theme(plot.title = element_text(hjust = 0.5))
+)
+           
+plot_3 <- (ggplot(data = attendance %>% 
+                      filter(arm != "HEPA")
+                  )  
+           + geom_smooth(mapping=aes(x=WeekStart, y=prop_absent_ill, color=arm)) 
+           + labs(x="", y="Illness Ratio") 
+           + ggtitle("LOESS Curves of Illness Ratio by Date: UVC vs Control")  
+           + theme(plot.title = element_text(hjust = 0.5))
+)
+
+grid.arrange(plot_2, plot_3, plot_1, nrow=3)
+```
+
+```{r ttrates, echo=FALSE, warning=FALSE, message=FALSE, fig.keep="all", fig.cap="blah"}
+# 
+```
+Similarly the logistic regression results show a statistically significant relationship between the use of HEPA air filtration and a reduction in illness absence rates (Table \ref{logreg}). The multi-variable regression shows the best fit to the data, and estimates that HEPA filters reduce the illness absence rate by 0.816% (95% CI -1.199, -0.433) - the estimated baseline illness rate is 6.61% (95% CI 6.241, 6.978), so this signifies a 12.3% mean reduction in illness related absences when comparing schools using HEPA filters to those not. 
+
+\begin{table}[!htbp] \centering 
+\begin{tabular}{@{\extracolsep{5pt}}lc} 
+\\[-1.8ex]\hline 
+\hline \\[-1.8ex] 
+ & \multicolumn{1}{c}{\textit{Dependent variable:}} \\ 
+\cline{2-2} 
+\\[-1.8ex] & Illness Rate (\%) \\ 
+\hline \\[-1.8ex] 
+ Baseline & 6.610$^{***}$ \\ 
+  & (0.188) \\ 
+  & \\ 
+ Distance from 01/01/2022 (Days) & $-$0.019$^{***}$ \\ 
+  & (0.002) \\ 
+  & \\ 
+ HEPA & $-$0.816$^{***}$ \\ 
+  & (0.195) \\ 
+  & \\ 
+\hline \\[-1.8ex] 
+Observations & 1,084 \\ 
+R$^{2}$ & 0.095 \\ 
+Adjusted R$^{2}$ & 0.093 \\ 
+Residual Std. Error & 3.006 (df = 1081) \\ 
+F Statistic & 56.574$^{***}$ (df = 2; 1081) \\ 
+\hline 
+\hline \\[-1.8ex] 
+\textit{Note:}  & \multicolumn{1}{r}{$^{*}$p$<$0.1; $^{**}$p$<$0.05; $^{***}$p$<$0.01} \\ 
+\end{tabular} 
+  \caption{Logistic regression results for illness ratios as a function of HEPA filtration (Yes/No) and absolute number of days from 1st January 2022. UVC filtration was removed as a factor as it was not statistically significant} 
+  \label{logreg} 
+\end{table} 
+
+The UVC intervention does not show a statistically significant relationship with illness rates and so were removed from the final model. This is unsurprising given the similarity in distribution of illness rates between the UVC and control schools seen in Figure \@ref(fig:armrates) - the two are almost indistinguishable. It is difficult to draw conclusions from this result, as very few (if any) of the filters were active during the peak period of illness related absences from October 2021 to February 2022. We would require data covering the winter period 2022/2023, or the results of parralell work using air quality measurements to reach a more definitive conclusion.
+
+```{r, include=FALSE}
+all.lm <- lm(prop_absent_ill ~ arm, data=attendance)
+stargazer(all.lm)
+```
+```{r, include=FALSE}
+attendance <- attendance %>% 
+    mutate(jan_dist = abs(WeekStart - as.Date("2022-01-01")))
+all_plus.lm <- lm(prop_absent_ill ~ HEPA + jan_dist, data=attendance)
+stargazer(all_plus.lm)
+```
+
+```{r}
+attendance <- attendance %>% 
+    mutate(jan_dist = abs(WeekStart - as.Date("2022-01-01")))
+all_plus.lm <- lm(prop_absent_ill ~ HEPA + jan_dist, data=attendance)
+summary(all_plus.lm)
+```
+
+```{r}
+attendance[attendance$prop_absent_ill == 0, "prop_absent_ill"] <- 0.001
+attendance <- attendance %>% 
+    mutate(jan_dist = abs(WeekStart - as.Date("2022-01-01")))
+all_plus.lm <- glm("prop_absent_ill ~ HEPA + jan_dist + jan_dist*HEPA", 
+                   family=Gamma(link = "log"),
+                   data=attendance)
+summary(all_plus.lm)
+```
+
+```{r}
+attendance[attendance$prop_absent_ill == 0, "prop_absent_ill"] <- 0.001
+attendance <- attendance %>% 
+    mutate(jan_dist = abs(WeekStart - as.Date("2022-01-01")))
+all_plus.lm <- glm("prop_absent_ill ~ HEPA + jan_dist + jan_dist*HEPA", 
+                   family=Gamma(link = "log"),
+                   data=attendance)
+summary(all_plus.lm)
+```
+
+```{r}
+sep_to_jul <- seq(as.Date("2021-09-01"), as.Date("2022-07-30"), by="days")
+pi_week_start <- c(sep_to_jul, sep_to_jul)
+pi_hepa <- c(rep(TRUE, length(sep_to_jul)), rep(FALSE, length(sep_to_jul)))
+
+pred_int_data <- data.frame(HEPA=pi_hepa, 
+                            WeekStart=pi_week_start)
+pred_int_data <- pred_int_data %>% 
+    mutate(jan_dist = abs(WeekStart - as.Date("2022-01-01")))
+
+fit_results = predict.glm(all_plus.lm,    
+                          type="response",
+                      newdata=pred_int_data,    
+                      se.fit=TRUE)
+
+pred_int_data$predicted_illness_ratio <- fit_results$fit
+pred_int_data$lwr <- fit_results$fit - (fit_results$se*2)
+pred_int_data$upr <- fit_results$fit + (fit_results$se*2)
+pred_int_data
+```
+
+```{r}
+(ggplot(pred_int_data, aes(WeekStart))    
+ + geom_point(mapping=aes(y=predicted_illness_ratio,
+                           color=HEPA))
+ + geom_ribbon(aes(ymin=lwr, ymax=upr, color=HEPA), alpha=0.2))
+```
+
+```{r}
+```
+
+
+```{r}
+attendance %>% 
+    mutate(jan_ratio = as.integer(jan_dist)/150) %>%
+    mutate(cos_jan_dist = cos(jan_ratio*(pi/2))) %>%
+    select(jan_dist, jan_ratio, cos_jan_dist)
+```
+```{r}
+attendance[attendance$jan_dist > 150, "jan_dist"] <- as.difftime(150, units="days")
+attendance <- attendance %>% 
+    mutate(jan_ratio = as.integer(jan_dist)/150) %>%
+    mutate(cos_jan_dist = cos(jan_ratio*(pi/2))) 
+all_plus.lm <- glm("prop_absent_ill ~ HEPA + cos_jan_dist + cos_jan_dist*HEPA", 
+                   family=Gamma(link = "log"),
+                   data=attendance)
+summary(all_plus.lm)
+```
+
+```{r}
+sep_to_jul <- seq(as.Date("2021-09-01"), as.Date("2022-07-30"), by="days")
+pi_week_start <- c(sep_to_jul, sep_to_jul)
+pi_hepa <- c(rep(TRUE, length(sep_to_jul)), rep(FALSE, length(sep_to_jul)))
+pred_int_data <- data.frame(HEPA=pi_hepa, 
+                            WeekStart=pi_week_start)
+pred_int_data <- pred_int_data %>% 
+    mutate(jan_dist = abs(WeekStart - as.Date("2022-01-01")))
+
+pred_int_data <- pred_int_data %>% 
+    mutate(jan_ratio = as.integer(jan_dist)/150) %>%
+    mutate(cos_jan_dist = cos(jan_ratio*(pi/2))) 
+
+fit_results = predict.glm(all_plus.lm,    
+                          type="response",
+                      newdata=pred_int_data,    
+                      se.fit=TRUE)
+
+pred_int_data$predicted_illness_ratio <- fit_results$fit
+pred_int_data$lwr <- fit_results$fit - (fit_results$se*2)
+pred_int_data$upr <- fit_results$fit + (fit_results$se*2)
+pred_int_data
+```
+
+```{r}
+(ggplot(pred_int_data, aes(WeekStart))    
+ + geom_point(mapping=aes(y=predicted_illness_ratio,
+                           color=HEPA))
++ scale_y_continuous(limits = c(0, 16))
+ + geom_ribbon(aes(ymin=lwr, ymax=upr, color=HEPA), alpha=0.2)
+ + geom_point(data=attendance, mapping=aes(x=WeekStart, y=prop_absent_ill, color=HEPA)))
+```

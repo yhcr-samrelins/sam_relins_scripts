@@ -1,0 +1,68 @@
+# ClassAct - Noah Method
+
+We are interested in estimating the difference in illness sessions as a proportion of attended sessions, so called "illness ratios" between schools with HEPA filters and those without. The model we have currently adopted calculates illness ratios as a function of the presence of HEPA filters - whilst we can calculate a simple difference between the predicted ratios of HEPA filtered and non-HEPA filtered schools, this does not provide us with an estimate of the variance of, and consequently a confidence interval for, this figure. We propose an alternative method to estimate the proportion of illness ratios between HEPA filtered and control schools, whereby this figure is directly estimated as a coefficient of a re-formulated poisson regression. 
+
+It should be noted that, by adding a direct estimate of the proportion of illness ratios between HEPA filtered and control schools, we remove two important features of the original model:
+* **Covariates:** This method does not allow for the inclusion of the covariates in our initial model, CO_2 and positive tests in the local area, and thus the estimated differences are for unadjusted illness ratios.
+* **HEPA/control Illness ratios:** This method decomposes the illness ratio estimates in one of HEPA/control schools into multiple parameters. As such, it is not possible to estimate the variance of the mean illness ratios for both HEPA and control schools using this model, only the variance of the difference between them.
+As such, this method is proposed as an additional model for estimating the overall mean proportion of illness ratios between HEPA and control schools, and not as a replacement for the original model. 
+
+## The Model
+
+We begin with a model that estimates simple count of school sessions y_i as a poisson random variable, whose rate parameter is the mean session count:
+
+y_i ~ pois(y_bar)
+
+The rate parameter y_bar is given by a log-linear model, with coefficients describing the type of school session (illnesss or in-person), the presence or absence of HEPA filtration, and an interaction term for session type and presence of HEPA:
+
+log(y_bar) = b_0 + b_1*1_illness? + b_2*1_HEPA? + b_3*1_illness?*1_HEPA?
+
+Indicator functions encode a simple binary for the type of session count being estimated: in-person (1_illness? = 0) or or illness (1_illness? = 1), control (1_HEPA? = 0) or HEPA (1_HEPA? = 1). The log-linear relationship between the mean session count y_bar and the coefficients, means that the log-linear model is decomposed as follows:
+
+y_bar = e^b_0 * e^(b_1*1_illness?) * e^(b_2*1_HEPA?) * e^(b_3*1_illness?*1_HEPA?)
+
+Table XXXX contains lay-descriptions of each of the statistics estimated by the exponents of these coefficients. We see that by taking the exponent of the b_3 coefficient, we arrive at an estimate of the the mean illness ratio in HEPA filtered schools as a proportion of the mean illness ratio in control schools. The standard methodology for estimating the variance of regression coefficients then allows us to estimate a confidence interval for this statistic.
+
+| Coefficient | Variable | Description |
+|-------------|----------|-------------|
+| b_0 | n/a | The mean number of in-person sessions for non-HEPA schools |
+| | | |
+| b_1 | 1_illness? | The mean illness ratio in non-HEPA schools |
+| | | |
+| b_2 | 1_HEPA? | The mean ratio of in-person sessions in HEPA schools to in-person sessions in control schools |
+| | | |
+| b_3 | 1_illness?\*1_hepa? | The mean proportion of illness ratios (illness sessions as a proportion of in-person sessions) in HEPA schools compared to mean illness ratios in control schools |
+
+## Method
+
+We started by re-formatting our data to facilitate this new analysis. We took each observation from the initial analysis, the mean ratio of illness sessions to in-person sessions for each school over the study period, and decomposed them into two observations: a mean count of the attended sessions and a mean count of the illness sessions. We added binary indicators for the count type (illness or in-person) and the presence or absence of HEPA filters. An example of our re-formatted data can be seen in FIGURE XXXX (see code outputs below).
+
+We round our analyses in R, specifying our poisson log-linear model using the built-in `glm` function as follows:
+
+```
+model <- glm(
+    attendance_count ~ is_illness + is_illness*hepa_filters,
+    data = data,
+    family = poisson(link=log)
+)
+```
+
+and produced statistics using the `summary` and `confint` built-in helper functions.
+
+# Results
+
+As can be seen from the below outputs, the proportion of illness ratios between HEPA and control schools is 0.769 (95% CI: 0.758, 0.780) - that is, HEPA filtered schools show an estimated reduction of sessions missed due to illness as a proportion of sessions attended of 23.1% (95% CI: 22.0%, 24.2%).
+
+As stated above, we can provide variance estimates for the mean illness ratios of only control or HEPA schools depending on the parametarisation of this model (in this case control schools). As such, we will omit these estimates and refer the reader to the initial model for estimates of these statistics. 
+
+# Additional Materials
+
+## Explanation by Intuition
+
+This can be understood by intuition: the model begins at a baseline (whereby both illness_? and HEPA_? are zero), giving the mean count of in-person attendance sessions in control schools, e^b_0. We then have a coefficient to vary the count by the type of session (where illness_? = 1, HEPA_? = 0), which gives the mean proportion of illness session to in-person sessions e^b_1 in control schools. 
+
+We then have two coefficients that act in partnership to estimate the effect of HEPA filtration, b_2 and b_3. b_2 adjusts the number of sessions counted based on the presence of HEPA filters, HEPA_? = 1. In a simple model with only independent interactions between attendance type and the presence of hepa filters, the adjustment of b_2 would be unidirectional - this would imply an effect of HEPA filters as reducing/increasing **both** in person attendance and illness sessions by the same proportion. Because of this, an interaction term b_3 is included, adjusting the proportion of illness sessions in schools with HEPA filters. As such, e^b_2 is the mean proportion of in-person attended sessions between control and HEPA schools (where illness_? = 0, HEPA_? = 1) and e^b_3, only being present with both b_1 and b_2 (HEPA_? = 1, illness_? = 1), encodes the mean proportional difference in the proportion of illness to in-person sessions between control and HEPA schools.
+
+## Explanation by ?proof?
+
+See "Noah method explainer.docx.pdf"

@@ -1,0 +1,161 @@
+---
+title: "Illness Outliers"
+author: "Sam Relins"
+date: '2022-09-06'
+output: html_document
+---
+
+<!-- Summary: Exploration of illness ratio outliers from attendance data, with breakdown of attendance codes contributing to outlying values. Analysis was used to inform discussions with Bradford Council IMT and individual schools, highlighting unusually large/small values for different attendance codes. -->
+
+```{r setup}
+library(tidyverse)
+```
+```{r}
+attendance <- read_csv("~/Documents/BIHR/class_act/data/checkpoints/attendance_ckpt_20_jul.csv")
+
+long_value_cols <- c(
+    "Unk", "I02", "X02", "X09", "X06", "X07", "am", "pm", "X08", "X01", "#", 
+    "I01", "B", "C", "D", "E", "G", "H", "I", "J", "L", "M",  "N", "O", "P", 
+    "R", "S", "T", "U", "V", "W", "X", "Y", "Z"
+)
+long_tab_cols <- c("School", "WeekStart", long_value_cols)
+attendance_outliers <- gather(attendance %>%  
+                                  select(long_tab_cols),  
+                              variable, value, long_value_cols)
+
+thresholds <- attendance_outliers %>% group_by(School, variable) %>% 
+    summarise(upr_threshold = quantile(value, p=0.75) + 1.5*(IQR(value)), 
+              lwr_threshold = quantile(value, p=0.25) - 1.5*(IQR(value)))
+
+attendance_outliers <- attendance_outliers %>% 
+    left_join(thresholds, by=c("School", "variable")) %>% 
+    mutate(is_outlier = value > upr_threshold | value < lwr_threshold) %>% 
+    select(-c(lwr_threshold, upr_threshold))
+
+prop_ill_values <- gather(attendance %>% 
+                              select(School, WeekStart, prop_absent_ill),  
+                          variable, value, prop_absent_ill)
+
+prop_ill_thresholds <- prop_ill_values %>% group_by(WeekStart) %>% 
+    summarise(upr_threshold = quantile(value, p=0.75) + 1.5*(IQR(value)), 
+              lwr_threshold = quantile(value, p=0.25) - 1.5*(IQR(value)))
+
+prop_ill_values <- prop_ill_values %>% 
+    left_join(prop_ill_thresholds, by="WeekStart") %>%  
+    mutate(is_outlier = value > upr_threshold | value < lwr_threshold) %>% 
+    select(-c(lwr_threshold, upr_threshold))
+
+attendance_outliers <- rbind(attendance_outliers, prop_ill_values)
+
+```
+
+```{r}
+plot_prop_ill_outliers <- function(school) {
+    ggplot() +
+        geom_boxplot(data = attendance_outliers %>%  
+                         filter(variable == "prop_absent_ill"),
+            aes(x=WeekStart,  
+                y=value, 
+                group=WeekStart),
+            color="black") +
+        geom_point(data = attendance_outliers %>%  
+                       filter(variable == "prop_absent_ill") %>% 
+                       filter(School == school) %>%
+                       filter(is_outlier),
+                   aes(x=WeekStart, y=value), color="red")
+}
+
+
+get_illness_outlier_weeks <-function(school) {
+    attendance_outliers %>%  
+        filter(School == school) %>% 
+        filter(variable == "prop_absent_ill") %>% 
+        filter(is_outlier) %>% 
+        pull(WeekStart)
+}
+
+
+get_vars_with_outliers <-function(school, outlier_weeks) {
+    vars <- attendance_outliers %>% 
+        filter(School == school) %>%
+        filter(WeekStart %in% outlier_weeks) %>%
+        group_by(variable) %>%
+        summarise(has_outliers = any(is_outlier)) %>%
+        filter(has_outliers) %>% pull(variable)
+} 
+    
+
+plot_att_code_outliers <- function(school) {
+    outlier_weeks <- get_illness_outlier_weeks(school) 
+    outlier_vars <- get_vars_with_outliers(school, outlier_weeks)
+    ggplot() + 
+        geom_boxplot(data=attendance_outliers %>% 
+                         filter(variable %in% outlier_vars) %>%
+                         filter(School == school), 
+                     aes(value)) + 
+        geom_point(data=attendance_outliers %>%  
+                       filter(variable %in% outlier_vars) %>%
+                       filter(School == school) %>%
+                       filter(WeekStart %in% outlier_weeks), 
+                     aes(value, 0),
+                     color = "red") + 
+        facet_grid(variable ~ ., switch="y") +
+        theme(axis.text.y=element_blank(),
+              axis.title.y=element_blank(),
+              axis.ticks.y=element_blank())
+}
+
+
+return_outlier_stats <- function(school) {
+    outlier_weeks <- get_illness_outlier_weeks(school) 
+    outlier_vars <- get_vars_with_outliers(school, outlier_weeks)
+    spread(attendance_outliers %>% 
+               filter(WeekStart %in% outlier_weeks) %>%
+               filter(School == school) %>%
+               select(-is_outlier), 
+           key=variable, value=value) %>%
+        select(School, WeekStart, all_of(outlier_vars))
+}
+```
+
+```{r}
+school <- "Shirley Manor Primary"
+plot_prop_ill_outliers(school)
+plot_att_code_outliers(school)
+return_outlier_stats(school)
+```
+```{r}
+attendance %>% filter(School=="Shirley Manor Primary") %>%
+    filter(WeekStart > as.Date("2021-09-12")) %>% 
+    filter(WeekStart < as.Date("2021-09-28")) %>%
+    select(School, WeekStart, am, pm, I02, X02, Z)
+```
+```{r}
+attendance %>% filter(School == "Bradford Academy") %>% select(-att_string)
+```
+
+```{r}
+attendance %>% filter(School == school) %>% 
+    select(School, WeekStart, pupils, am, pm, Z)
+```
+
+```{r}
+attendance %>% filter(School == school) %>% 
+    select(School, WeekStart, pupils, am, pm, Z) %>%
+    mutate(z_diff = (pupils - 200) * 10 - Z)
+```
+
+```{r}
+school <- "Burley and Woodhead"
+plot_prop_ill_outliers(school)
+plot_att_code_outliers(school)
+return_outlier_stats(school)
+```
+
+```{r}
+school <- "Saltaire Primary School"
+plot_prop_ill_outliers(school)
+plot_att_code_outliers(school)
+return_outlier_stats(school)
+```
+

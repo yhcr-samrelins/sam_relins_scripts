@@ -1,0 +1,89 @@
+%! Author = samrelins
+%! Date = 08/06/2022
+
+1.75\% (1227) of the 70277 individuals in the matched cohort had a diagnosis of ASD. Of the children with autism diagnoses 64.1\% (786) had a ``low'' EYFSP total score and 68.5\% (841) had a ``low'' 5-item subscore, compared with 16.5\% (11359) and 14.5\% (9979) respectively from the individuals without an ASD diagnosis (Table \ref{tab:table_1}).
+
+As a baseline for odds comparison, we used a female individual, with a ``not low'' EYFSP score/subscore, not eligible for free school meals, of white british ethnicity and of < 10 years of age. Our regression models showed that children with a low EYFSP subscore were approximately 16 times more likely to be diagnosed with ASD than our reference baseline (Table \ref{tab:regression_results}). Males were over 3 times more likely to be diagnosed with ASD than the baseline, and individuals of Pakistani or Other ethnicity were 0.62/0.47 times as likely to be diagnosed with an ASD compared to the baseline. The free school meals and age variables (excluding age 11, which given the effect size and confidence intervals is likely a statistical anomaly) were not statistically significant, .
+
+The interaction between gender and EYFSP scores proved to be statistically significant. A male individual with a low EYFSP subscore was 36.3 times more likely to have an ASD diagnosis than baseline; females with a low subscore had a comparitively lower odds of 16.3 of being diagnoesd with ASD. The greater odds for males with low scores was to be expected, given the increase in risk seen in males and individuals with low EYFSP scores individually; the interaction coefficient itself was negative. Thus, the interaction coefficient, male and low EYFSP score, served to decrease the estimated odds that would result were we to assume sex and EYFSP scores were independent.
+
+\begin{table}[h]
+\centering
+\begin{scriptsize}
+\begin{tabular}{P{38mm}P{20mm}P{13mm}P{18mm}P{18mm}P{18mm}}
+\toprule
+            & & & \multicolumn{3}{P{55mm}}{\textbf{Grouped by ASD Diagnosis, n(\%)}} \\[1mm]
+            & & Missing & Overall & No & Yes \\
+\midrule
+n & {} & & 70277 & 69050 & 1227 \\[2mm]
+Male & No & 639 &  33607 (48.3) &  33354 (48.8) &  253 (20.6) \\
+& Yes & & 36031 (51.7) & 35062 (51.2) & 969 (79.4) \\[2mm]
+Free School Meals Eligible & No & 0 &  55725 (79.3) &  54816 (79.4) &  909 (74.1) \\
+            & Yes & & 14552 (20.7) & 14234 (20.6) & 318 (25.9) \\[2mm]
+Ethnicity, & White British & & 35901 (54.6) & 35129 (54.4) & 772 (64.8) \\
+            & Pakistani & &  20509 (31.2) &  20248 (31.4) &  261 (21.9) \\
+            & Other & 4528 &   9339 (14.2) &   9181 (14.2) &  158 (13.3) \\[2mm]
+Age At Extract & <10 & 1 & 15857 (22.6) & 15610 (22.6) & 247 (20.1) \\
+           & 10 & & 10037 (14.3) & 9901 (14.3) &  136 (11.1) \\
+           & 11 & & 10058 (14.3) & 9865 (14.3) & 193 (15.7) \\
+           & 12 & & 10299 (14.7) & 10107 (14.6) & 192 (15.6) \\
+           & 13 & & 10281 (14.6) & 10071 (14.6) & 210 (17.1) \\
+           & >13 & & 13744 (19.6) & 13495 (19.5) & 249 (20.3) \\[2mm]
+Has Low Total Score & No & 0 & 58132 (82.7) & 57691 (83.5) & 441 (35.9) \\
+            & Yes & & 12145 (17.3) & 11359 (16.5) & 786 (64.1) \\[2mm]
+Has Low Subscore & No & 0 & 59457 (84.6) & 59071 (85.5) & 386 (31.5) \\
+            & Yes & & 10820 (15.4) & 9979 (14.5) & 841 (68.5) \\[2mm]
+\bottomrule
+\end{tabular}
+\end{scriptsize}
+\caption{Sample charachteristics broken down by ASD diagnoses}
+\label{tab:table_1}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{scriptsize}
+\begin{tabular}{P{55mm}|P{15mm}P{25mm}|P{15mm}P{25mm}}
+\toprule
+{} & \multicolumn{2}{l}{\textbf{EYFSP Total Score}} & \multicolumn{2}{l}{\textbf{EYFSP 5 Item Sub-Score}}\\[1mm]
+{} & Odds Ratio & 95\% CI (low, high) & Odds Ratio & 95\% CI (low, high) \\
+\midrule\\
+\textbf{Univariate - EYFSP Score:} & & & & \\
+\\
+\textbf{EYFS Score:} & & & & \\
+\quad Not Low (reference) & - & - & - & - \\
+\quad Low &  9.1211 &  (8.085, 10.29) & 12.943347 & (11.427, 14.661) \\[2mm]
+\midrule\\
+\textbf{Multivariable - EYFSP Score and covariates:} & & & & \\
+\\
+\textbf{EYFS Score:} & & & & \\
+\quad Not Low (reference) & - & - & - & - \\
+\quad low & 11.090676 &  (8.557, 14.374) & 16.504568 & (12.676, 21.49) \\[2mm]
+\textbf{Gender:} & & & & \\
+\quad Female (reference) & - & - & - & - \\
+\quad Male & 3.454496 & (2.758, 4.326) & 3.317918 & (2.618, 4.206) \\[2mm]
+\textbf{Interaction - Male and low Score*:} & & & & \\
+\quad No (reference) & - & - & - & - \\
+\quad Yes & 27.643759 & (12.718, 60.099) & 36.342941 & (16.33, 80.883) \\[2mm]
+\textbf{Free School Meals Eligible:} & & & & \\
+\quad No & - & - & - & - \\
+\quad Yes & 0.943423 & (0.823, 1.081) & 0.902225 & (0.787, 1.035) \\[2mm]
+\textbf{Ethnicity:} & & & & \\
+\quad White British (reference) & - & - & - & - \\
+\quad Pakistani & 0.473528 & (0.409, 0.548) & 0.476529 & (0.412, 0.551) \\
+\quad Other & 0.621275 & (0.521, 0.741) & 0.616304 & (0.516, 0.736) \\[2mm]
+\textbf{Age:} & & & & \\
+\quad < 10 (reference) & - & - & - & - \\
+\quad 10 & 0.866965 & (0.698, 1.077) & 0.84456 & (0.711, 1.1) \\
+\quad 11 & 1.256707 & (1.032, 1.531) & 1.269895 & (1.041, 1.549) \\
+\quad 12 & 1.156423 & (0.95, 1.408) & 1.170753 & (0.96, 1.428) \\
+\quad 13 & 1.134527 & (0.936, 1.375) & 1.104517 & (0.91, 1.34) \\
+\quad >13 & 0.985703 & (0.819, 1.186) & 0.953314 & (0.792, 1.148) \\[2mm]
+\bottomrule
+\end{tabular}
+\end{scriptsize}
+\caption{Odds ratios from logistic regression models. Total effects of EYFS scores are reported in the univariate models. Effects when controlling for coviariates are reported in Multivariable models. \textbf{*}Interaction effect odds are calculated using a combination of the individual ``male'', ``low score'' and ''male\&low score'' coefficients.}
+\label{tab:regression_results}
+\end{table}
+
+\newpage

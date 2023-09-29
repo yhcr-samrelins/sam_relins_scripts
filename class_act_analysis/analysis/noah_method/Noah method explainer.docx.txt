@@ -1,0 +1,167 @@
+﻿The Noah method
+NOTE: This model was inspired by Noah Greifer’s response to a question on stats.stackoverflow.
+
+
+
+
+This model calculates a mean count value - e.g., the mean count of illness-related absences in the HEPA schools - given a combination of inputs for the count-type and school variables (Table xinputvalsx). The illness ratio for HEPA schools can be calculated by dividing the mean count of illness-related absences in the HEPA schools (inputs: count type = 1; school = 1) by the mean count of in-school attendance sessions in the HEPA schools (inputs: count type = 0; school = 1). The illness ratio for non-HEPA schools can be calculated, similarly.
+We are interested in the relative (multiplicative) difference between mean illness-ratio for HEPA and non-HEPA schools, i.e. the illness ratio for HEPA schools divided by the illness ratio for non-HEPA schools. A complicated approach to this would involve inputting each of the sets of input values shown in Table xinputvalsx to output each (logarithm of) mean count and calculating the risk ratio as
+
+
+
+
+
+
+
+While this would give us an estimate of the risk ratio, it would not provide us with an estimate of the standard error, which we need to calculate the confidence interval.
+Fortunately, the specification of our model directly provides an estimate of the risk ratio and its standard error via the count type-school interaction coefficient. This is because our model specified as
+
+is equivalent to 
+
+where  indicates a mean, and  are the regression coefficients.
+We can show that the exponentiated count type-school interaction coefficient –  – is the risk ratio, by equating the outputted mean counts to regression coefficients:
+
+
+
+
+
+
+Thus, we have shown that the risk ratio is equivalent to . We noted earlier that the model’s regression coefficient is  rather than , and the model outputs the natural logarithm of mean counts, log, rather than the raw mean counts used in the previous equations. So, for the same reason that we exponentiate the model outputs to obtain mean counts, we exponentiate the count type-school regression coefficient to obtain the risk ratio.
+
+
+Table xinputvalsx A description of the outputs produced for a given set of input values. Outputs must be exponentiated to be in units of counts rather than log(counts).
+	
+
+	
+
+	Independent variables
+(a.k.a. inputs)
+	Description
+	Symbol
+	Count type
+	School
+	Count type-School
+	Mean count of in-school attendance sessions for HEPA schools
+	
+	0
+	0
+	0
+	Mean count of in-school attendance sessions for non-HEPA schools
+	
+	0
+	1
+	0
+	Mean count of illness-related absences for HEPA schools
+	
+	1
+	0
+	0
+	Mean count of illness-related absences for non-HEPA schools
+	
+	1
+	1
+	1
+	
+
+
+
+Adding covariates, v1.1
+I want to compare the illness ratios for HEPA and non-HEPA schools when we include covariates to adjust for confounding. Note: without the covariates:
+
+
+I introduce CO2 concentration and COVID rate with their regression coefficients  and , respectively.
+The algebra shenanigans below assume that counts from non-HEPA schools are indexed by  and counts from HEPA schools are indexed by , where . It assumes that each count has a meaningful CO2 concentration that can be attributed to it, and a meaningful COVID rate that can be attributed to it.
+The model structure is
+
+
+
+The illness ratios are:
+
+
+
+
+
+
+
+
+
+
+
+Note, that both illness ratios are the same as when we didn’t include the CO2 concentration and COVID rate. This is because all covariates are accounted for when calculating each school group’s illness ratio.
+While our process inherently adjusts for confounding bias with school groups (i.e. HEPA -vs- non-HEPA), collider bias can persist if assignment to HEPA or non-HEPA schools was not random.
+
+
+Adding covariates, v2
+I want to compare the illness ratios for HEPA and non-HEPA schools when we include covariates to adjust for confounding. Note: without the covariates:
+
+
+I change the names of the independent variables to match SR’s nomenclature:
+* * I introduce CO2 concentration and COVID rate with their regression coefficients  and , respectively. I introduce interaction terms for these with  and , noted as regression coefficients  and .
+The algebra shenanigans below assume that counts from non-HEPA schools are indexed by  and counts from HEPA schools are indexed by , where . It assumes that each count has a meaningful CO2 concentration that can be attributed to it, and a meaningful COVID rate that can be attributed to it.
+The model structure is
+
+
+
+
+
+
+
+The illness ratio for the non-HEPA schools is:
+
+
+
+…written in terms of regression coefficients…
+
+…remove 0 terms…
+
+…cancel above what is below…
+
+…minor rearranging for reasons that will become apparent later…
+
+
+
+
+
+The next illness ratio is for the HEPA schools:
+
+…written in terms of regression coefficients…
+
+
+
+…remove 0 terms…
+
+…extract variable names as common factors…
+
+…cancel above what is below…
+
+
+
+
+
+
+
+Now, we calculate the risk ratio, which is the illness ratio for HEPA schools divided by the illness rate for non-HEPA schools:
+
+…written in terms of regression coefficients…
+
+…first pass of cancelling above what is below…
+
+…the variables , , , and  do not cancel because they are referring to different portions of the data set. Previously, when we replaced  with 1 or 0, what we were actually doing was replacing  with the mean value for that subgroup. Of course, by definition, everyone in the subgroup defined by  has a value of 1, so the mean value is 1.
+But, things are different for CO2 concentration and COVID rate because it not everyone in the subgroups defined by  and  has the same value. Instead, for example,  represents the mean CO2 concentration in HEPA schools, while  represents the mean CO2 concentration in non-HEPA schools. Instead of cancelling  and  above and below the line, we have to incorporate them into the exponent…
+
+
+
+…extract coefficients as common factors…
+
+
+
+Discussion
+Without the covariates for CO2 concentration and COVID rate, the risk ratio is represented by the coefficient for the interaction term between  and , . With the covariates included, risk ratio is represented by the sum of three components:
+   1. the interaction term between  and , ;
+   2. the interaction term between  and , , multiplied by the difference in the mean CO2 concentration observed HEPA and non-HEPA schools;
+   3. the interaction term between  and , , multiplied by the difference in the mean CO2 concentration observed HEPA and non-HEPA schools.
+Calculating a point estimate for this risk ratio is easy; just sum the three components. The issue we now face is that we had an estimate of the standard error for the risk ratio in the no-covariate model, but we don’t and have an estimate for the standard error for the new model that includes the covariates. This is because the risk ratio from the no-covariate model was simply the value of the regression coefficient – this coefficient had an associated standard error. In contrast, the risk ratio in the model with covariates includes a sum of coefficients each with their own standard errors (plus some extra multiplication for the fun). The algebraic gymnastics of the Noah model are now moot.
+Conclusion
+Simply adding covariates with main and interaction effects to the Noah model means we no longer get an estimate of the standard error for the risk ratio. To get the standard error for this new risk ratio, we would need to respecify the model.
+Confidence intervals for linear combinations
+Including the covariates means that we no longer have only one coefficient to represent the risk ratio. Therefore, we have to combine the standard errors of multiple coefficients  to calculate the combined standard error. We should be able to do this fairly easily using these methods. I’m not 100% clear on what the estimated risk ratio would actually be, but it makes sense that it would be  because, in the unadjusted model, it was .

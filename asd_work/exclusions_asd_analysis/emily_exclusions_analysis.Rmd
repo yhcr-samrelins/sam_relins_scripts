@@ -1,0 +1,706 @@
+---
+title: "ASD/Exclusions Analysis"
+author: "Emily Williams"
+date: "04/09/2022-"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Load relevant packages
+#install.packages("bigrquery")
+#install.packages("tidyverse")
+#install.packages("scales")
+#install.packages("ggvenn")
+#install.packages("broom")
+
+library(bigrquery)
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(ggvenn)
+library(broom)
+
+# Set authentication (opens in new window, tick all boxes)
+bq_projects()
+```
+
+# Hypothesis
+
+- Pupils with undiagnosed ASD will be more likely to be excluded than children with diagnosed ASD.
+
+In other words:
+
+School exclusions: asdNever < asdCurrent < asdFuture
+
+Predicting schools exclusion by comparing asdNever (no ASD diagnosis ever; n.b. not necessarily 'neurotypical'), asdCurrent (currently has a diagnosis of ASD at the time of exclusion), and asdFuture (does not currently have a diagnosis of ASD at the time of exclusion but gets one later). Currently going to do one of these models for each Year Group (e.g. Reception, Year 1, ... Year 11)
+
+## Import the ASD data
+
+Each row is one person (their diagnosis)
+The people in this query have a diagnosis of ASD in their GP notes
+We may not have school data for them to know if they were excluded or not
+They may have been diagnosed after leaving school
+We want to get rid of the people who we don't have school data for
+We want to keep people, whether they were excluded or not
+During the analysis, will be careful to note when they received the diagnosis
+
+```{r importAsd}
+
+# Import the ASD data
+
+asd_query <-
+  bq_dataset_query(
+    query = "SELECT * FROM ASD_data",
+    x = "yhcr-prd-phm-bia-core.CY_EM_ASD"
+  )
+
+asd_data <- bq_table_download(asd_query)
+asd_data_backup <- asd_data
+
+head(asd_data)
+
+```
+
+## Import the school person data
+
+Each row is one person
+The people in this query appear in one or more of the DfE tables
+Some will have ASD, most won't
+Some will have been excluded, most won't
+We only know if someone has been excluded if they're in the exclusions table (next query)
+We presume that if a person is in the person table but not the exclusions table, they have gone to a Bradford school but have not been excluded.
+Don't filter to just excluded people.
+
+```{r importSchoolPersonData}
+
+# Import the school person data
+
+school_person_query <-
+  bq_dataset_query(
+    query = "SELECT person_id, birth_datetime FROM person",
+    x = "yhcr-prd-phm-bia-core.CY_FDM_DepartmentForEducation"
+  )
+
+school_person_data <- bq_table_download(school_person_query)
+school_person_data_backup <- school_person_data
+
+head(school_person_data)
+
+```
+
+
+## Import the school exclusion data
+
+Each row is one academic year for one person, so people may appear more than once
+The people in this query have received some kind of exclusion
+Some will have ASD, most won't
+All will be in the person data but there will be others in the person data who were not excluded
+
+```{r importExclData}
+
+# Import the school exclusion data
+exclusion_query <-
+  bq_dataset_query(
+    query = "SELECT * FROM exclusions_cleaned",
+    x = "yhcr-prd-phm-bia-core.CY_FDM_DepartmentForEducation"
+  )
+
+exclusion_data <- bq_table_download(exclusion_query)
+exclusion_data_backup <- exclusion_data
+
+```
+
+## Import the school census data
+
+This tells us which years a pupil attended school
+It's important to make sure that only children who appear in certain academic years in the census are included in the analysis for those academic years
+Can't assume that just because a child is in the person data, they were in school for a given academic year and not excluded if they were not in the exclusions data
+Was originally going to get only these columns, but deciced to get everything (person_id, AcademicYear, CensusDate, CensusTerm, NCyearActual, NCyearLeaving, SENprovision, SENprovisionMajor, PrimarySENtype, SecondarySENtype, SENUnitIndicator)
+
+
+```{r importCensusData}
+
+# Import the school census data
+school_census_query <-
+  bq_dataset_query(
+    query = "SELECT * FROM src_census",
+    x = "yhcr-prd-phm-bia-core.CY_FDM_DepartmentForEducation"
+  )
+
+school_census_data <- bq_table_download(school_census_query)
+school_census_data_backup <- school_census_data
+
+head(school_census_data)
+
+# remove the queries from memory
+rm(asd_query, school_person_query, exclusion_query, school_census_query)
+
+```
+
+Let's take a look at the number of people who are in each of these three datasets:
+- ASD diagnoses
+- School exclusion
+- School census
+
+```{r dataframeComparison}
+
+
+list_people <- list(
+  asd = unique(asd_data$person_id), 
+  excluded = unique(exclusion_data$person_id),
+  schoolCensus = unique(school_census_data$person_id)
+)
+
+(venn <- ggvenn(list_people, show_percentage = FALSE))
+
+```
+
+As can be seen in the venn diagram:
+
+Of the `r nrow(asd_data)` people in the ASD data, only 489 (never excluded) + 83 (excluded ever) are in the school census.
+
+It is important to limit our analysis to people in the school census, which tells us which children were attending a Bradford school that year. This is because the exclusion data only tells us which children were excluded - if we do not limit our analysis to children who were at a Bradford school that year, we run the risk of overestimating the proportion of people with an ASD diagnosis who did not get excluded.
+
+To work out which children were not excluded, we have to assume that this will be the children who were attending Bradford schools that year (i.e. in the school census) but not on the exclusion list that year. Unfortunately we do not have school census data for 4369 people with ASD, so we will have to limit our analysis to the 489 + 83 (572) people with ASD who appear in the school census data. In a future step I will limit our ASD data and exclusion data to those who appear in the school census (I had expected all people in the exclusion data to appear in the census data but according to the venn diagram, 5 people are in the exclusions data but not the census data, so I will be removing these people).
+
+I will be doing logistic regressions for each year group separately, e.g. one for Reception, one for Year 1... all the way up to Year 11 (preliminary analysis then Sam may take it further, adding dependencies between year groups). The 'NCyearActual' column from the census data contains the year group the pupil was in (e.g. Reception, Year 1...), each academic year / term. This is extremely helpful as it will allow me to do the separate analysis on each of these year groups. Sometimes NCyearActual (year group) is empty, but the 'AgeAtStartOfAcademicYear' column has data. 
+
+Where the year group (NCyearActual) is missing but age (AgeAtStartOfAcademicYear) is available, In these cases, I will create a new column (NCyearActuallFilled), where I will fill in NCyearActual by estimating the year group from their age. I will only be doing this for Reception - Year 11 as I will be limiting my analysis to these year groups.
+
+```{r fillYearGroup}
+
+school_census_orig_data <- school_census_data
+
+# if it's missing, fill NCyearActual based on AgeAtStartOfAcademicYear
+# only do it for the mean year groups - R - 11
+school_census_data <- school_census_data %>%
+  mutate(NCyearActualFilled = case_when(
+    # if NCyearActual is not missing, use that
+    !is.na(NCyearActual) ~ NCyearActual,
+    # if they were 4 at the start of school, say reception
+    AgeAtStartOfAcademicYear == 4 ~ "R",
+    # if they were between 5 and 15
+    between(as.numeric(AgeAtStartOfAcademicYear), 5, 15) ~ 
+      # add 4 to this age to get the year group
+      as.character(as.numeric(AgeAtStartOfAcademicYear) - 4)))
+
+# check this worked
+check <- school_census_data %>%
+  filter(is.na(NCyearActual))
+
+table(check$NCyearActualFilled, check$AgeAtStartOfAcademicYear,
+      useNA = "always", deparse.level = 2)
+
+# remove this check object
+rm(check)
+
+
+```
+
+The columns are the ages and the rows are the year groups (NCyearActualFilled), though the year groups are not in chronological order yet.
+
+I will be doing logistic regressions for each year group, but this will only be the main year groups (Reception to Year 11). There are other year groups in the census data that are not within this range (e.g. early years, years 12-14) that I will not be performing regressions on. 
+
+I will therefore filter the census data only to the main year groups of interest, adding 'myg' at the start, for 'main year groups'. I will also make a copy of the year group column, making it an ordered factor (necessary for the year groups to show up in the right order on plots).
+
+```{r filterCensusToMainYearGroups}
+
+# filter the census data to people who are in one of the year groups of interest: R - 11
+
+main_year_groups <- factor(c("R", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"), ordered = TRUE,
+                           levels = c("R", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"))
+
+myg_school_census_data <- school_census_data %>%
+  filter(NCyearActualFilled %in% main_year_groups) %>%
+  # also make an ordered factor based on it
+  mutate(NCyearActualFilledFactor = factor(NCyearActualFilled,
+                                           ordered = TRUE,
+                                           levels = main_year_groups))
+```
+
+Now we need to only keep people in the ASD and exclusion data if they show up at least once in the census data within these main year groups. Note that we may lose a small amount of people who we were unable to fill in the year group for, if their age at the start of the academic year was unavailable.
+
+```{r filterASDandExclToCensus}
+
+# only keep people in the asd and exclusion data if they show up at least once in the census data
+
+# get the person identification numbers of the people in the census data
+
+myg_census_ids <- myg_school_census_data %>%
+  select(person_id) %>%
+  unique()
+
+# remove any people in the asd data who are not in the school data
+# Otherwise, we may overestimate the proportion of people with an ASD diagnosis who did not get excluded.
+# This is because only people who are excluded appear in the exclusions table
+
+myg_asd_data <- asd_data %>%
+  inner_join(myg_census_ids)
+
+myg_asd_ids <- myg_asd_data %>%
+  select(person_id) 
+
+str_c("The remaining number of people in the ASD data who were in the school census within a mean year group is: ", nrow(myg_asd_ids))
+
+# do the same for the exclusions data - limit to only the people who have a (main) school year in the census data at least once
+
+myg_exclusion_data <- exclusion_data %>%
+  inner_join(myg_census_ids)
+
+myg_excl_ids <- myg_exclusion_data %>%
+  select(person_id) %>%
+  unique()
+
+str_c("The remaining number of people in the exclusion data who were in the school census within a mean year group is: ", nrow(myg_excl_ids))
+
+# redraw the venn diagram on the filtered data
+
+myg_list_people <- list(
+  asd = myg_asd_ids$person_id, 
+  excluded = myg_excl_ids$person_id
+)
+
+(myg_venn <- ggvenn(myg_list_people, show_percentage = FALSE))
+
+```
+
+This venn diagram shows the number of people who have ever had an ASD diagnosis and were ever excluded, now that our data has been filtered to those who were in the school census in one the main year groups at least once.
+
+Next we'll tidy up the exclusions data a bit so that there's only one row per person per excluded year. Some people are excluded more than once in a single academic year. For the purpose of the present analysis, I will be calculating whether the person had an ASD diagnosis at their *first* exclusion that academic year, to keep things simple.
+
+```{r makeExclOneRowEach}
+
+# people may appear multiple times in the exclusion data within a single academic year
+# make sure there's just one row per academic year
+
+# StartDate is the start of the exclusion
+
+myg_excl_acYears <- myg_exclusion_data %>%
+  arrange(person_id, AcademicYear, StartDate) %>%
+  group_by(person_id, AcademicYear) %>%
+  summarise(firstExclAcYear = first(StartDate),
+            exclRowsThisAcYear = n()) %>%
+  ungroup()
+
+```
+
+Next, for all the people in the main year groups in the census, calculate whether they were (a) ever diagnosed with ASD, and (b) ever excluded. Take a lot at the top six people.
+
+Also calculate the difference in exclusion incidence for those with and without an ASD diagnosis ever. This is broad strokes and we will check year group by year group soon.
+
+
+```{r eachPDiagExcl}
+
+myg_all_people <- myg_census_ids %>%
+  # add their dob
+  #left_join(select(school_person_data, person_id, birth_datetime)) %>%
+  # calculate their diagnosis / exclusion group
+  mutate(asdDiagEver = person_id %in% myg_asd_ids$person_id,
+         exclEver = person_id %in% myg_excl_ids$person_id)
+
+head(myg_all_people)
+
+# what perc of pupils were excluded, with and without a diagnosis?
+
+asdExclTable <- table(myg_all_people$asdDiagEver, myg_all_people$exclEver, deparse.level = 2)
+asdExclTable
+
+# of those without asd diag ever, this % were excluded ever:
+str_c("Of the individuals who have NEVER received an ASD diagnosis, ",
+      round((asdExclTable[1,2] / (asdExclTable[1,2] + asdExclTable[1,1])) * 100, 2),
+      "% were excluded EVER")
+
+# of those with asd diag ever, this % were excluded ever:
+str_c("Of the individuals who have EVER received an ASD diagnosis, ",
+      round((asdExclTable[2,2] / (asdExclTable[2,2] + asdExclTable[2,1])) * 100, 2),
+      "% were excluded EVER")
+
+```
+
+Now let's take that list of all the people and make it so each person has a row for each academic year (e.g. 2012/13) that they were in the census. (Not all people will have been in a Bradford school for all their schooling).
+
+Also add on the columns from the ASD data and the exclusions data.
+
+```{r addAcYearRowsAndASDExclCols}
+
+# create a new dataframe
+myg_all_people_censuses <- myg_all_people %>%
+  # add these columns from the census data
+  left_join(select(myg_school_census_data, person_id, AcademicYear,
+                   NCyearActualFilled, NCyearActualFilledFactor,
+                   AgeAtStartOfAcademicYear)) %>%
+  # remove duplicate rows, e.g. more than one censuses in a year (i.e. diff terms)
+  unique() %>%
+  # join on the asd dataframe
+  left_join(myg_asd_data) %>%
+  # join on the exclusions dataframe
+  left_join(myg_excl_acYears) %>%
+  # rearrange the columns like so
+  select(person_id, AcademicYear, NCyearActualFilled, NCyearActualFilledFactor,
+         AgeAtStartOfAcademicYear, everything()) %>%
+  # rearrange the rows like so
+  arrange(person_id, AcademicYear)
+
+head(myg_all_people_censuses)
+
+```
+
+Crucially, we want to calculate whether people who were excluded currently had an ASD diagnosis or were due to receive one in the future. 
+
+There are some subtleties to this calculation. Specifically, we need to know:
+
+- did a diagnosis happen this year?
+- did they have a diagnosis at the end of the year?
+- were they excluded this year?
+- did they have a diagnosis at the point of their first exclusion of this year?
+
+
+First we need to lay out the start and end date for each academic year. Let's say that the start was 1st September and the end was 31st July for simplicity. Then we can calculate the rest.
+
+Sometimes a child is (according to the census) in a year group, e.g. Year 2 for several academic years. We will quantify this (nAcYearsThisNCyearActual). We do not know if this means they were held back a year, or if the census data is wrong (or both). Either way, could muddy the results as exclusions are reported per academic year (e.g. 2012/2013) and we are interested in year groups for this analysis (e.g. Year 2). Let's filter out these cases where a child is in a year group for several academic years as it will likely inflate the incidence of exclusions. After we've done the analysis, we will re-run including these people and check the effect on the results.
+
+
+```{r diagExclTimes}
+
+# for each unique academic year in the census (e.g. 2012/2013), calculate the start and end date of that year
+# doing this first because it is quicker than doing this attached to the full dataset (my_all_people_censuses)
+# Select just the years
+startEndAcYears <- select(myg_all_people_censuses, AcademicYear) %>%
+  # only keep the unique ones
+  unique() %>%
+  # add these columns 
+  mutate(
+    # calendar year A is first 4 characters, e.g. 2012
+    calYearA = str_sub(AcademicYear, end = 4),
+    # calendar year B is last 4 characters, e.g. 2013
+    calYearB = str_sub(AcademicYear, start = -4),
+    # make the academic start date e.g. 2012-09-01, i.e. 1st September that year
+    startDateAcYr = str_c(calYearA, "-09-01"),
+    # make the academic end date e.g. 2013-07-30, i.e. 31st July that year 
+    endDateAcYr = str_c(calYearB, "-07-31"),
+    # make both of these date types
+    startDateAcYear = as.Date(startDateAcYr),
+    endDateAcYear = as.Date(endDateAcYr)
+  )
+
+head(startEndAcYears)
+
+
+# make a summary table for use in the regressions
+main_data <- myg_all_people_censuses %>%
+  # add ac year start and end dates
+  left_join(select(startEndAcYears, AcademicYear, startDateAcYear, endDateAcYear)) %>%
+  mutate(
+    # did a diagnosis happen this year? - leave blank (NA) if no diagnosis ever
+    diagHappenedThisYear = if_else(asdDiagEver,
+                                   diagnosis_date %within% 
+                                     interval(startDateAcYear, endDateAcYear),
+                                   NA),
+    # did they have a diagnosis at the end of the year? - leave blank (NA) if no diagnosis ever
+    hasDiagAtYearEnd = if_else(asdDiagEver,
+                               diagnosis_date < endDateAcYear,
+                               NA),
+    # were they excluded this year?
+    excludedThisYear = !is.na(firstExclAcYear),
+    # did they have a diagnosis at the point of first exclusion?
+    hasDiagAtFirstExclAcYear = if_else(asdDiagEver,
+                                 diagnosis_date < firstExclAcYear,
+                                 NA)) %>%
+  group_by(person_id, NCyearActualFilled) %>%
+  mutate(  
+    # sometimes a child is in a year group, e.g. Year 2 for several years - make a note of this
+    academicYearsThisNCyearActual = paste(AcademicYear, collapse = ", "),
+    nAcYearsThisNCyearActual = length(unique(AcademicYear))) %>%
+  # keep these columns in this order
+  select(person_id, NCyearActualFilled, NCyearActualFilledFactor,
+         AcademicYear, excludedThisYear, diagHappenedThisYear, hasDiagAtYearEnd,
+         hasDiagAtFirstExclAcYear, firstExclAcYear, diagnosis_date, exclEver,
+         asdDiagEver, academicYearsThisNCyearActual, nAcYearsThisNCyearActual) %>%
+  ungroup() 
+
+```
+
+The final thing we need to do is use these new bits of information to place each pupil (within each year group) into 'diagnosis groups'. That is:
+
+- asdNever = never diagnosed with Autism Spectrum Disorder (ASD), not necessarily 'neurotypical'
+- asdCurrent = has diagnosis of ASD at first exclusion of year (if excluded) or end of year (if not excluded)
+- asdFuture = doesn't have diagnosis at first exclusion of year or end of year, but later received diagnosis
+
+```{r placeIntoGroups}
+
+# calculate the group of diagnosis - asdNever, asdCurrent, asdFuture
+main_data_with_diagGroups <- main_data %>%
+  # calculate the diagnosis group
+  mutate(diagGroup = case_when(
+    # asdNever - never diagnosed
+    !asdDiagEver ~ "asdNever",
+    # asdCurrent - if excluded, has diagnosis at first exclusion
+    asdDiagEver & excludedThisYear & hasDiagAtFirstExclAcYear ~ "asdCurrent",
+    # asdCurrent - if not excluded, has diagnosis at end of ac year
+    asdDiagEver & !excludedThisYear & hasDiagAtYearEnd ~ "asdCurrent",
+    # asdFuture - if excluded, does not have diagnosis a first exclusion
+    asdDiagEver & excludedThisYear & !hasDiagAtFirstExclAcYear ~ "asdFuture",
+    # asdFuture - if not excluded, does not have diagnosis at end of ac year
+    asdDiagEver & !excludedThisYear & !hasDiagAtYearEnd ~ "asdFuture"),
+    # set diagGroup as an ordered factor
+    diagGroup = factor(diagGroup, ordered = TRUE, 
+                       levels = c("asdNever", "asdCurrent", "asdFuture")))
+
+```
+
+Okay, the data is now ready for the analysis (logistic regression per year group).
+
+Now let's make a graph to visualise the comparisons we're making. The graph will compare the percentage of pupils with at least one exclusion that year across diagnosis groups (asdNever, asdCurrent, asdFuture) for each year group (i.e. Reception, Year 1...).
+
+```{r plotData}
+
+# for use in plotting
+forPlotting <- main_data_with_diagGroups %>%
+  # filter out those in the same year group for multiple years
+   filter(nAcYearsThisNCyearActual == 1) %>%
+  # do this for each year group and each diagnosis group
+  group_by(NCyearActualFilledFactor, diagGroup) %>%
+  # calculate: number in this diagnosis group in this year group
+  summarise(nDiagGroupThisYear = n(),
+            # number in this diagnosis group who were excluded while being in this year group
+            nDiagGroupExclThisYear = sum(excludedThisYear == TRUE),
+            # number in this diagnosis group who were not excluded while being in this year group
+            nDiagGroupNotExclThisYear = nDiagGroupThisYear - nDiagGroupExclThisYear,
+            # proportion in this diagnosis group who were excluded while being in this year group
+            propDiagGroupExclThisYear = nDiagGroupExclThisYear / nDiagGroupThisYear,
+            # as a percentage
+            percDiagGroupExclThisYear = propDiagGroupExclThisYear * 100)
+
+head(forPlotting)
+
+# prepare plot components:
+my_ylab <- "Percentage with at least one exclusion this year"
+my_xlab_diag <- "Diagnosis Group"
+my_xlab_year <- "Year Group"
+my_subtitle <- " asdNever = never diagnosed with Autism Spectrum Disorder (ASD), not necessarily 'neurotypical';\n asdCurrent = has diagnosis of ASD at first exclusion of year (if excluded) or end of year (if not excluded);\n asdFuture = doesn't have diagnosis at first exclusion of year or end of year, but later received diagnosis"
+my_title_all_ps <- "Percentage of each Diagnosis Group who were excluded at least once (for each Year Group) (unfiltered)"
+my_title_not_all_ps <- "Percentage of each Diagnosis Group who were excluded at least once (for each Year Group) (filtered)"
+
+# plot the proportion of each diagnosis group who were excluded while being in this year group
+# REMOVE people who who according to the census were in the same year group, e.g. Year 2, for multiple academic years, e.g. 2012/13, 2013/14
+
+ggplot(forPlotting,
+       aes(x = NCyearActualFilledFactor,
+       y = percDiagGroupExclThisYear,
+       colour = diagGroup,
+       group = diagGroup)) +
+  geom_point() +
+  geom_line() +
+  theme_bw() +
+  ylab(my_ylab) +
+  xlab(my_xlab_year) +
+  ggtitle(my_title_not_all_ps) +
+  labs(subtitle = my_subtitle) +
+  scale_x_discrete(labels = c("R" = "Reception", "1" = "Year 1", "2" = "Year 2",
+                            "3" = "Year 3", "4" = "Year 4", "5" = "Year 5",
+                            "6" = "Year 6", "7" = "Year 7", "8" = "Year 8",
+                            "9" = "Year 9", "10" = "Year 10", "11" = "Year 11")) +
+  scale_colour_manual(values = c("grey", "blue", "red"))
+
+```
+
+*It is important to note that pupils do not stay in their 'diagnosis groups' for the duration of school. Pupils with ASD likely begin school as 'asdFuture' as they have not yet been diagnosed, but diagnoses will happen every school year, where pupils will move into the 'asdCurrent' group. (Those who are 'asdNever' will not change groups).*
+
+In general, there are fluctuations of exclusion rates in Primary School, then a hump shape for exclusion rates in Secondary School. Presumably part of the increase in exclusions in Secondary School can be attributed to likely having different teachers and being in a different environment. For pupils with ASD (diagnosed or undiagnosed), the pupils' new teachers will likely not yet be familiar with the child's behaviours and needs. Any leeway given during Primary School will likely have to be built up again in Secondary School.
+
+Speaking first of the 'asdNever' group, it is interesting to note that there is a gradual increase in exclusions across Primary School, then a sharp increase once the pupils begin Secondary School, which declines in Year 11.
+
+For the 'asdCurrent' line (diagnosed ASD), the peak of exclusions in Primary School is Year 1. In Secondary School, the hump peaks in Year 8 and 9 then decreases.
+
+For the 'asdFuture' line (undiagnosed ASD), the peak of exclusions in Primary School occurs in Year 3, with seemingly a small hump here where teachers may have given more leeway for the rest of Primary. Once these pupils move to Secondary School, there is a large increase in exclusions, potentially because of both the child's behaviour and less 
+
+# Logistic Regressions (filtered)
+
+Do logistic regressions just comparing asdCurrent and asdFuture (not to asdNever as this will affect the baseline). 
+
+For the purpose of this analysis, remove individuals who according to the census were in the same year group, e.g. Year 2, for multiple academic years, e.g. 2012/13, 2013/14. We will re-run the analysis including these participants at the end.
+
+```{r logRegsAsdExcl}
+
+# set the year group names
+yearGrpNames <- c("Reception", "Year 1", "Year 2",
+                   "Year 3", "Year 4", "Year 5",
+                   "Year 6", "Year 7", "Year 8",
+                   "Year 9", "Year 10", "Year 11")
+
+# for running the for loop
+count <- 0
+nYearGrps <- 12
+RESULTSmodels <- vector("list", nYearGrps) 
+
+# for each year group 
+for(yearGroup in main_year_groups) {
+  
+  # get the data for just this year group
+  yearGroupData <- filter(main_data_with_diagGroups,
+                          # only keep the data from the current year group
+                          NCyearActualFilled == yearGroup,
+                          # only keep people who have an ASD diagnosis
+                          diagGroup != "asdNever",
+                          # only keep people who were in this year group for just 1 year
+                          nAcYearsThisNCyearActual == 1
+                          )
+  
+  # the is this logistic regression
+  modelThisYear <- glm(excludedThisYear ~ diagGroup,
+      family = binomial(link = 'logit'),
+      data = yearGroupData)
+
+  # increment the counter
+  count <- count + 1
+
+  # display the year group
+  print(str_c("----------", yearGrpNames[count], "----------"))
+  # display the results
+  print(summary(modelThisYear))
+  
+  # add the results to a list
+  RESULTSmodels[[count]] <- modelThisYear
+  
+  # make a data frame that includes the odds ratio
+  oddsRatiosThisYear <- as.data.frame(cbind(yearGroup = yearGrpNames[[count]],
+                                            coef = coef(modelThisYear),
+                                            pval = summary(modelThisYear)$coefficients[,4],
+                                            oddsRatio = exp(coef(modelThisYear)))) %>%
+    rownames_to_column("factor")
+  
+  # make another dataframe for the odds ratios where each year will get appended to it
+  if(count == 1) {
+    RESULTSoddsRatios <- oddsRatiosThisYear
+  } else {
+    RESULTSoddsRatios <- rbind(RESULTSoddsRatios, oddsRatiosThisYear)
+  }
+  
+}
+
+# make these columns numeric (rather than characters) and remove the intercept coefficient
+RESULTSoddsRatios <- RESULTSoddsRatios %>%
+  mutate(across(c(coef, pval, oddsRatio), as.numeric))
+
+# view odds ratios etc
+RESULTSoddsRatios
+
+```
+
+I will discuss these results with Sam. Seemingly the likelihood of exclusion for asdCurrent and asdFuture is not significantly different for any Year Group.
+
+# Logistic Regressions (unfiltered)
+
+Now let's replot and reanalyse, this time keeping in the people who were in the a given year group for multiple academic years (e.g. were held back a year or more, or census has incorrect information).
+
+```{r repeatAnalysisButUnfiltered}
+
+# do the same but include the people who were in the same year group for multiple years
+
+# for use in plotting
+forPlottingUnfiltered <- main_data_with_diagGroups %>%
+  # do this for each year group and each diagnosis group
+  group_by(NCyearActualFilledFactor, diagGroup) %>%
+  # calculate: number in this diagnosis group in this year group
+  summarise(nDiagGroupThisYear = n(),
+            # number in this diagnosis group who were excluded while being in this year group
+            nDiagGroupExclThisYear = sum(excludedThisYear == TRUE),
+            # number in this diagnosis group who were not excluded while being in this year group
+            nDiagGroupNotExclThisYear = nDiagGroupThisYear - nDiagGroupExclThisYear,
+            # proportion in this diagnosis group who were excluded while being in this year group
+            propDiagGroupExclThisYear = nDiagGroupExclThisYear / nDiagGroupThisYear,
+            # as a percentage
+            percDiagGroupExclThisYear = propDiagGroupExclThisYear * 100)
+
+ggplot(forPlottingUnfiltered,
+       aes(x = NCyearActualFilledFactor,
+           y = percDiagGroupExclThisYear,
+           colour = diagGroup,
+           group = diagGroup)) +
+  geom_point() +
+  geom_line() +
+  theme_bw() +
+  ylab(my_ylab) +
+  xlab(my_xlab_year) +
+  ggtitle(my_title_all_ps) +
+  labs(subtitle = my_subtitle) +
+  scale_x_discrete(labels = c("R" = "Reception", "1" = "Year 1", "2" = "Year 2",
+                            "3" = "Year 3", "4" = "Year 4", "5" = "Year 5",
+                            "6" = "Year 6", "7" = "Year 7", "8" = "Year 8",
+                            "9" = "Year 9", "10" = "Year 10", "11" = "Year 11")) +
+  scale_colour_manual(values = c("grey", "blue", "red"))
+
+
+# for running the for loop
+countUnfiltered <- 0
+nYearGrps <- 12
+RESULTSmodelsUnfiltered <- vector("list", nYearGrps) 
+
+# for each year group 
+for(yearGroup in main_year_groups) {
+  
+  # get the data for just this year group
+  yearGroupDataUnfiltered <- filter(main_data_with_diagGroups,
+                          # only keep the data from the current year group
+                          NCyearActualFilled == yearGroup,
+                          # only keep people who have an ASD diagnosis
+                          diagGroup != "asdNever"#,
+                          #---------------------------------------------
+                          # do not only keep people who were in this year group for just 1 year
+                          #nAcYearsThisNCyearActual == 1
+                          #---------------------------------------------
+                          )
+  
+  # the is this logistic regression
+  modelThisYearUnfiltered <- glm(excludedThisYear ~ diagGroup,
+      family = binomial(link = 'logit'),
+      data = yearGroupDataUnfiltered)
+  
+  # increment the counter
+  countUnfiltered <- countUnfiltered + 1
+
+  # display the year group
+  print(str_c("----------", yearGrpNames[countUnfiltered], "----------"))
+  # display the results
+  print(summary(modelThisYearUnfiltered))
+
+  # add the results to a list
+  RESULTSmodelsUnfiltered[[countUnfiltered]] <- modelThisYearUnfiltered
+  
+  # make a data frame that includes the odds ratio
+  oddsRatiosThisYearUnfiltered <- as.data.frame(cbind(yearGroup = yearGrpNames[[countUnfiltered]],
+                                            coef = coef(modelThisYearUnfiltered),
+                                            pval = summary(modelThisYearUnfiltered)$coefficients[,4],
+                                            oddsRatio = exp(coef(modelThisYearUnfiltered)))) %>%
+    rownames_to_column("factor")
+  
+  # make another dataframe for the odds ratios where each year will get appended to it
+  if(countUnfiltered == 1) {
+    RESULTSoddsRatiosUnfiltered <- oddsRatiosThisYearUnfiltered
+  } else {
+    RESULTSoddsRatiosUnfiltered <- rbind(RESULTSoddsRatiosUnfiltered, oddsRatiosThisYearUnfiltered)
+  }
+  
+}
+
+# make these columns numeric (rather than characters) and remove the intercept coefficient
+RESULTSoddsRatiosUnfiltered <- RESULTSoddsRatiosUnfiltered %>%
+  mutate(across(c(coef, pval, oddsRatio), as.numeric))
+
+# view odds ratios etc
+RESULTSoddsRatiosUnfiltered
+
+```
+
+Including the pupils who were in a given Year Group for multiple academic years hasn't changed the story. You can see from the figures though that it mainly changes the incidence of exclusion of asdCurrent pupils, specifically Years 5, 7 and 8. Need to consider whether this is meaningful.
+
+
+# Thoughts on future analysis
+
+- Include a figure for the proportion of asdCurrent and asdFuture children across Year Groups (asdFuture should increase and asdCurrent should decrease)
+- Check the effect of the school having recognised the child as SEND.
+- Since a lot of ASD diagnoses occur after leaving school, we are likely labelling some children as asdNever when they could be have ASD but haven't received a diagnosis yet. Consider excluding data from the last X years to minimise this assumption.
+- Compare the different types of exclusions.
+- Look at whether the people who were in a given year group for multiple academic years are more likely to be SEN (i.e. they were held back rather than the census being wrong).

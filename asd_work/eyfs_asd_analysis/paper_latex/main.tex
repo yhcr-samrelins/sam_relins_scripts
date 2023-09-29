@@ -1,0 +1,63 @@
+%! Author = samrelins
+%! Date = 27/08/2021
+
+% Preamble
+\documentclass[11pt]{article}
+
+% Packages
+\usepackage{amsmath}
+\usepackage{pdflscape}
+\usepackage{multirow}
+\usepackage{lmodern}
+\usepackage{caption}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{capt-of}
+\usepackage[table,xcdraw]{xcolor}
+\usepackage[utf8]{inputenc}
+\usepackage{float}
+\usepackage{array, ragged2e}
+\usepackage{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{titlesec, blindtext}
+\usepackage{appendix}
+\usepackage{longtable, booktabs,etoolbox}
+\newcolumntype{P}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+
+\usepackage{geometry}
+
+\graphicspath{ {../images/} }
+
+\geometry{
+    a4paper,
+    top = 30mm,
+    bottom = 30mm,
+    left = 20mm,
+    right = 20mm
+}
+
+
+% Document
+\begin{document}
+
+    \section*{Abstract}\label{sec:abstract}
+    \input{abstract}
+
+    \section{Introduction}\label{sec:introduction}
+    \input{introduction}
+
+    \section{Methods}\label{sec:methods}
+    \input{methods}
+
+    \section{Results}\label{sec:results}
+    \input{Results}
+
+    \section{Discussion}\label{sec:discussion}
+    \input{discussion}
+
+    \bibliography{main}
+    \bibliographystyle{unsrt}
+
+
+\end{document}

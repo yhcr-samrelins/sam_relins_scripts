@@ -1,0 +1,204 @@
+---
+title: "brad_la_data_analysis"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r}
+library(tidyverse)
+library(foreach)
+library(iterators)
+library(rjags)
+```
+## Problems so far:
+
+* DfE covid data: reporting not mandatory - lots of missing schools - bias towards missing data in treatment arm
+* Brad Council data v1: Identified errors in possible sessions calculations - issue with aggregation script - OBVIOUSLY NO QA!!
+* Brad Council data v2: possible sessions stat net of covid absences plus other authorised absences - can't work out proportion of sessions missed due to covid vs possible others using this data
+* Brad Council full data: TBC
+* None of the schools seem to follow the covid codings to the letter e.g. forced to self isolate specifically says only 18+ y/o students should fall into this category
+
+```{r}
+# load attendance data
+attendance <- read_csv("/Users/samrelins/Documents/BIHR/dfe_covid/data/pre_individual_data/brad_la_school_attendance_full.csv")
+
+# add study arms to data
+attendance$arm <- 0
+arm1 = c(
+  "Horton Grange Primary School", "Bradford Academy", 
+  "Cavendish Primary School", "St Matthew's Catholic Primary School", 
+  "Farnham Primary School", "St Joseph's Catholic Primary School (Bingley)", 
+  "Green Lane Primary School", "Westbourne Primary School", 
+  "Margaret McMillan Primary School", "Beckfoot Nessfield", 
+  "Beckfoot Priestthorpe Primary School & Nursery"
+)
+attendance[attendance$school %in% arm1, "arm"] <- 1
+arm2 = c(
+  "Eastwood Community School", "Shirley Manor Primary School",  
+  "Swain House Primary School", "Bowling Park Primary School", 
+  "Burley and Woodhead CofE Primary School", "Crossflatts Primary School", 
+  "Copthorne Primary School", "St Columba's Catholic Primary School", 
+  "St Joseph's Catholic Primary School (Bradford)", 
+  "St William's Catholic Primary School"
+)
+attendance[attendance$school %in% arm2, "arm"] <- 2
+arm3 = c(
+  "Riddlesden St Mary's CofE Primary School", "Newby Primary School", 
+  "Thackley Primary School", "Addingham Primary School", 
+  "The Academy At St. James", "St Paul's CofE Primary School", 
+  "Clayton Village Primary School", "Sandal Primary School", 
+  "Grove House Primary School", "Saltaire Primary School"
+)
+attendance[attendance$school %in% arm3, "arm"] <- 3
+attendance <- attendance %>% mutate(hepa_arm = arm == 2)
+
+# convert week_start to date format
+attendance <- attendance %>% 
+  mutate(week_start = as.Date(week_start, format="%m/%d/%y"))
+
+# remove stray october date
+attendance <- attendance %>% filter(week_start > "2021-09-01")
+
+# rename St Joseph's schools to make easier to differentiate
+attendance <- attendance %>% 
+  mutate(school = replace(school, 
+                          school == "St Joseph's Catholic Primary School (Bingley)",  
+                          "St Joseph's Bingley")) %>%
+  mutate(school = replace(school, 
+                          school == "St Joseph's Catholic Primary School (Bradford)",  
+                          "St Joseph's Bradford"))
+
+# shorten down school names
+shorten_name <- function(name) {
+    words = unlist(strsplit(name, " "))
+    if(length(words) >= 3) {
+      paste(words[1:3], collapse=" ")
+    } else {
+      paste(words, collapse=" ")
+    }
+}
+attendance <- attendance %>% 
+  mutate(school = sapply(school, shorten_name))
+
+# add extra aggregate data and reorder
+attendance <- attendance %>%
+  mutate(other_attendance = rowSums(across(c(L, B, D, J, P, V, W)))) %>%
+  mutate(covid_absences = rowSums(across(c(I02, X06, X07, X02, X09, X08, X)))) %>%
+  mutate(illness_absences = rowSums(across(c(I, I01, I02)))) %>%
+  mutate(cov_illness_absences = rowSums(across(c(I, I01, covid_absences)))) %>%
+  mutate(recorded_sessions = possible_sessions + covid_absences + I01 + Y + `#`) %>%
+  mutate(missing_sessions = total_sessions - recorded_sessions) %>%
+  relocate(other_attendance, .after=pm) %>%
+  relocate(covid_absences, .after=U) %>%
+  relocate(recorded_sessions, .after=total_sessions) %>%
+  relocate(missing_sessions, .after=recorded_sessions)
+
+str(attendance)
+```
+## Sanity Checks
+
+```{r}
+attendance %>% group_by(week_start) %>% count()
+```
+
+Authorised = sum of rows C,E,H,I,M,R,S,T
+```{r}
+all(unlist(
+  attendance %>%
+  mutate(check = authorised == rowSums(across(c(C,E,H,I,M,R,S,T)))) %>%
+  select(check)
+))
+```
+
+Unauthorised = sum of rows G,N,O,U
+```{r}
+all(unlist(
+  attendance %>%
+  mutate(check = unauthorised == rowSums(across(c(G,N,O,U)))) %>%
+  select(check)
+))
+```
+
+sessions_attended = am + pm + other_attendance
+```{r}
+all(unlist(
+  attendance %>%
+  mutate(check = sessions_attended == am + pm + other_attendance) %>%
+  select(check)
+))
+```
+
+possible_sessions = sessions_attended + authorised + unauthorised
+```{r}
+all(unlist(
+  attendance %>%
+  mutate(check = possible_sessions == sessions_attended + authorised + unauthorised) %>%
+  select(check)
+))
+```
+## Total Sessions Checks
+
+```{r}
+attendance %>% filter(school == "Bradford Academy") %>% select(I, I01)
+```
+
+```{r}
+attendance %>% filter(I01 > 50) %>%
+  select(school, week_start, missing_sessions, I, I01)
+```
+
+## Main issue - what figure should we use to calculate the proportion of covid absences
+
+* We're evaluating measures to improve air quality in shcools - so, need a proportion of children based on the number of children in the building i.e. excluding those not pysically present at school
+* children attending school that week? Might be better to introduce a lag, as covid infections take 3/5 days to manifest - so possibly better to consider covid infections this week as a proportion of those attending school last?
+
+```{r}
+attendance %>% filter(school=="St Joseph's Bingley")
+```
+```{r}
+attendance %>% filter(missing_sessions > 30) %>% group_by(arm) %>% count()
+```
+```{r}
+# remove worst of missing data
+attendance <- attendance %>% filter(missing_sessions < 30) 
+```
+```{r}
+attendance <- attendance %>% mutate(pct_attended = sessions_attended / recorded_sessions* 100)
+```
+```{r}
+attendance %>% group_by(hepa_arm) %>% summarise(pct_attended = mean(pct_attended))
+```
+```{r}
+attendance %>% group_by(arm) %>% summarise(pct_attended = mean(pct_attended))
+```
+```{r}
+attended.lm <- lm(pct_attended ~ hepa_arm, data=attendance)
+summary(attended.lm)
+```
+```{r}
+attendance <- attendance %>% mutate(pct_illness = illness_absences / recorded_sessions* 100)
+```
+```{r}
+attendance %>% group_by(hepa_arm) %>% summarise(illness_absences = mean(pct_illness))
+```
+```{r}
+attendance %>% group_by(arm) %>% summarise(illness_absences = mean(pct_illness))
+```
+```{r}
+illness.lm <- lm(pct_illness ~ hepa_arm, data=attendance)
+summary(illness.lm)
+```
+```{r}
+attendance <- attendance %>% mutate(pct_cov_illness = cov_illness_absences / recorded_sessions* 100)
+```
+```{r}
+attendance %>% group_by(hepa_arm) %>% summarise(illness_absences = mean(pct_cov_illness))
+```
+```{r}
+attendance %>% group_by(arm) %>% summarise(illness_absences = mean(pct_cov_illness))
+```
+```{r}
+cov_illness.lm <- lm(pct_cov_illness ~ hepa_arm, data=attendance)
+summary(cov_illness.lm)
+```

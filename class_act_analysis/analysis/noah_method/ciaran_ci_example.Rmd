@@ -1,0 +1,95 @@
+---
+title: "Untitled"
+author: "Sam Relins"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+```{r}
+library(tidyverse)
+```
+```{r}
+myData <- readr::read_csv("/Users/samrelins/Downloads/fakeData.csv")
+```
+```{r}
+myData %>% group_by(illnessCountVar) %>% count()
+```
+
+
+```{r}
+# Specify and build model.
+mod1 <-
+  glm(
+    component_count ~ illnessCountVar + schoolGrp + illnessCountVar*schoolGrp,
+    data = myData,
+    family = poisson(link = 'log')
+    )
+summary(mod1)
+```
+```{r}
+# Calculate the average illness-ratio for HEPA group, on the 
+# illness-ratio scale (as opposed to the log-scale)
+grp_HEPA_ratio <-
+  summary(mod1)$coefficients %>%
+  as.data.frame() %>%
+  dplyr::select(Estimate) %>%
+  filter(row.names(.) %in% c('illnessCountVar', 'illnessCountVar:schoolGrp')) %>%
+  sum() %>%
+  exp()
+message("Average illness-ratio for HEPA group = ", round(grp_HEPA_ratio, 3))
+```
+
+```{r}
+# Calculate the average illness-ratio for non-HEPA group, on the 
+# illness-ratio scale (as opposed to the log-scale)
+grp_nonHEPA_ratio <-
+  summary(mod1)$coefficients %>%
+  as.data.frame() %>%
+  dplyr::select(Estimate) %>%
+  filter(row.names(.) %in% c('illnessCountVar')) %>%
+  exp()
+message("Average illness-ratio for non-HEPA group = ", round(grp_nonHEPA_ratio, 3))
+```
+```{r}
+exp(coef(mod1)["illnessCountVar"])
+```
+
+
+```{r}
+# Calculate the average ratio of illness-ratios from groups A and B, on the 
+# illness-ratio scale (as opposed to the log-scale). Specifically, this is
+# (illness-related absences in group A / In-school attendance sessions in group A)
+# /
+# (illness-related absences in group B / In-school attendance sessions in group B)
+grp_ratio_comparison <-
+  summary(mod1)$coefficients %>%
+  as.data.frame() %>%
+  dplyr::select(Estimate) %>%
+  filter(row.names(.) %in% c('illnessCountVar:schoolGrp')) %>%
+  sum() %>%
+  exp()
+
+grp_ratio_comparison_CIs <-
+  confint(mod1) %>%
+  as.data.frame() %>%
+  dplyr::filter(row.names(.) == 'illnessCountVar:schoolGrp') %>%
+  exp()
+
+```
+```{r}
+exp(coef(mod1)["illnessCountVar:schoolGrp"])
+```
+```{r}
+# Present message.
+message(
+  "The ratio of the groups' illness-ratios is ",
+  round(grp_ratio_comparison, 3),
+  " with a 95% confidence interval of ",
+  round(grp_ratio_comparison_CIs[1], 3),
+  "-",
+  round(grp_ratio_comparison_CIs[2], 3),
+  "."
+)
+```
+

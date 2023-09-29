@@ -1,0 +1,311 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+%
+\documentclass[
+]{article}
+\usepackage{amsmath,amssymb}
+\usepackage{lmodern}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math}
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+% Set default figure placement to htbp
+\makeatletter
+\def\fps@figure{htbp}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\usepackage{float} \usepackage{amsmath} \usepackage{booktabs} \usepackage{caption} \captionsetup{font=footnotesize}
+\ifLuaTeX
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+\IfFileExists{bookmark.sty}{\usepackage{bookmark}}{\usepackage{hyperref}}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same} % disable monospaced font for URLs
+\hypersetup{
+  pdftitle={Danielle/Leanne Analysis},
+  pdfauthor={Sam Relins},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\title{Danielle/Leanne Analysis}
+\author{Sam Relins}
+\date{2023-03-23}
+
+\begin{document}
+\maketitle
+
+\hypertarget{notes}{%
+\subsubsection{Notes:}\label{notes}}
+
+\begin{itemize}
+\tightlist
+\item
+  Regression on Age at Diagnosis: I'm leaving this out! Two main reasons
+  - 1. I think the descriptive analysis above says all you need to say
+  about the relationships between the variables we're looking at, and
+  the regression data adds nothing 2. (more importantly!) we've shown
+  above that age at diagnosis is bimodal for the whites group but
+  unimodal for asians - simple gaussian regression assumes a unimodal
+  outcome variable and certainly isn't well suited to a comparison of
+  the covariates in this case. If we're desperate to come up with some
+  sort of model for the data, we'd need to discuss a bit more, and it
+  would be considerably more complex as a piece of work
+\end{itemize}
+
+\hypertarget{methods}{%
+\section{Methods}\label{methods}}
+
+This study explores the demographic features of individuals 18 years old
+or younger, identified as having an Autism Spectrum Disorder (ASD) in
+the Connected Bradford primary care dataset. The primary cohort is
+defined as any individual with one or more SNOMED read-codes for ASD
+diagnoses in their primary care record. Information on age, ethnic
+group, are taken from the primary care record and form the basis of this
+analysis. An ``age at diagnosis'' variable is defined as the date at
+which the first ASD SNOMED code appears on an individual's records. The
+vast majority of the cohort fall either in the ``White'' or ``Asian''
+ethnic groups, so the other ethnicities have been grouped into an ``All
+Other'' ethnic group as low numbers of records prevent meaningful
+analysis of their subgroupings.
+
+The likelihood of diagnosis, based on the demographic features in the
+ASD cohort, is also described. The cohort for this analysis is defined
+as individuals 18 years old or younger appearing in the connected
+bradford education census data, and the outcome variable is a diagnosis
+of ASD as defined by individuals from the census data that also appear
+in the ASD cohort. Sex and ethnic group observations are taken from the
+primary care data or, where absent, are determined from the data in the
+education census records. Adjusted odds of ASD diagnosis and confidence
+intervals for each of the demographic variables are calculated using
+logistic regression.
+
+\hypertarget{results}{%
+\section{Results}\label{results}}
+
+\begin{table}[H]
+\centering
+\begin{scriptsize}
+\begin{tabular}{llll}
+\toprule
+            & & Missing & Count \\
+\midrule
+\textbf{n} & & & 2617 \\[2mm]
+\textbf{Sex} & Male & 3 & 2022 (77.4) \\
+& Female & & 592 (22.6) \\[2mm]
+\textbf{Ethnicity} & White & 251 & 1547 (65.4) \\
+            & Asian & & 636 (26.9) \\
+            & Other & & 183 (7.7) \\[2mm]
+\bottomrule
+\end{tabular}
+\end{scriptsize}
+\caption{Sample charachteristics of ASD cohort}
+\label{tab:asd_cohort}
+\end{table}
+
+Table \ref{tab:asd_cohort} shows the demographic breakdown of the ASD
+cohort.
+\textit{add comment here about the expected breakdown of ethnicities for this age group in the bradford population - I don't have a reference for this at the moment but it looks to me like there are fewer Asians than would be expected for under 18s - I can go on a hunt for this data if needed}.
+The majority of the cohort is male (77.4\%)
+\textit{insert comment about the accepted proportion of M/F with ASD - I'm assuming others will have a reference for this}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{plots/age_hist.jpg}
+\caption{Histogram showing counts of the age at diagnosis across the full ASD cohort}
+\label{fig:age_hist}
+\end{figure}
+
+Figure \ref{fig:age_hist} shows the distribution of age at diagnosis -
+it follows a bi-modal distribution with a sharp peak of diagnoses at age
+4 and a shallower peak at age 9.
+\textit{maybe some reference to causality for this if this phoenomena has already been studied - perhaps 2 different types of severity of ASD presentation that cause this pretty specific distribution}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{plots/age_sex_box.jpg}
+\caption{Box and whisker plots of age at diagnosis for males and females. The central line denotes the median, upper and lower bounds of the box denote the lower and upper quartiles. The "whiskers" (ends of lines protruding from each box) denote the highest/lowest data points that fall within 1.5 times the interquartile range above/below the bounds of the box.}
+\label{fig:age_sex_box}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{plots/age_eth_box.jpg}
+\caption{Box and whisker plots of age at diagnosis for each ethnicity group in the cohort. Produced using the same specification as Figure \ref{fig:age_sex_box}. Outliers (individual points plotted above/below the whiskers) are any data points that fall outside the 1.5 times interquartile range of the whiskers.}
+\label{fig:age_eth_box}
+\end{figure}
+
+Subdivision of age at diagnosis by sex shows little difference between
+the two sexes, with a slightly higher age of diagnosis amongst females.
+When divided by ethnicity, it can be seen that a much higher average age
+of diagnosis and a broader range of ages can been seen among white
+individuals, with the bulk of diagnoses occurring at much younger ages
+among the other ethnic groups.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{plots/age_eth_hist.jpg}
+\caption{Histograms of age at diagnosis for the white and asian ethnicities}
+\label{fig:age_eth_hist}
+\end{figure}
+
+Further comparison of the distribution of ages of diagnoses in the white
+and asian ethnicities (Figure \ref{fig:age_eth_hist}) reveals markedly
+different distributions. A distinct bimodal pattern of diagnosis ages is
+observed in the whites group, with peaks in diagnosis at 4 years of age
+and then at 9, whereas in the asian group a long tailed unimodal
+distribution can be seen with a peak only at age 4.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{plots/age_sex_eth_box.jpg}
+\caption{Box plots of age at diagnosis for each ethnic group subdivided by sex}
+\label{fig:age_sex_eth_box}
+\end{figure}
+
+Comparison of the sex differences in age at diagnosis between the
+different ethnic groups (Figure \ref{fig:age_sex_eth_box}) shows that
+females are diagnosed later on average in the white and other ethnic
+groups, but are diagnosed considerably earlier among the asian group.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{plots/asd_map.jpg}
+\caption{A choropleth map of the residential addresses of the individuals in the ASD cohort with addresses that fall within a bradford census ward. Bounding geometries are the census ward areas.}
+\label{fig:asd_map}
+\end{figure}
+
+Figure \ref{fig:asd_map} shows a choropleth map of the home residences
+of each of the individuals in with an ASD diagnosis by census ward.
+\textit{I don't really know the geography or geographic makeup of bradford well enough to make any intelligent comments here - I don't know weather the concentration of diagnoses in Keighley and the south east is worth pointing out?}
+
+\hypertarget{likelihood-of-diagnosis}{%
+\subsection{Likelihood of Diagnosis}\label{likelihood-of-diagnosis}}
+
+\begin{table}[H]
+\centering
+\begin{scriptsize}
+\begin{tabular}{llllll}
+\toprule
+            & & & \multicolumn{3}{l}{\textbf{Grouped by ASD Diagnosis, n(\%)}} \\[1mm]
+            & & Missing & Overall & No & Yes \\
+\midrule
+\textbf{n} & {} & & 130778 & 128396 & 2382 \\[2mm]
+\textbf{Sex} & Male & 322 & 67300 (51.6) &  65451 (51.1) & 1849 (77.6) \\
+& Female & & 63156 (48.4) & 62623 (48.9) & 553 (22.4) \\[2mm]
+\textbf{Ethnicity} & White & 16805 & 61982 (54.4) & 60560 (54.2) & 1422 (66.4) \\
+            & Asian & & 42069 (36.9) & 41510 (37.1) & 559 (26.1) \\
+            & Other & & 9922 (8.7) & 9760 (8.7) & 162 (7.6) \\[2mm]
+\bottomrule
+\end{tabular}
+\end{scriptsize}
+\caption{Sample charachteristics of the education census cohort broken down by ASD diagnoses}
+\label{tab:census_cohort}
+\end{table}
+
+In order to compare the likelihood of ASD diagnosis between the
+different demographic groups, a cohort of individuals under the age of
+18 from the Connected Bradford education census data was established.
+Table \ref{tab:census_cohort} shows the demographic breakdown of this
+cohort, along with a comparison of individuals with/without an ASD
+diagnosis. A much greater proportion of individuals with an ASD
+diagnosis are male than in the general education census cohort, and a
+much larger proportion of individuals diagnosed with ASD are white.
+
+\begin{table}[H]
+\centering
+\begin{scriptsize}
+\begin{tabular}{lllllll}
+\toprule
+\multicolumn{7}{c}{\textbf{Logistic Regression Results:}} \\[1mm]
+\midrule\\
+\multicolumn{2}{l}{\hspace{1cm}\textbf{Formula:}} & \multicolumn{5}{l}{\textit{$ASD Diagnosis \sim Male + White + Other$}} \\[1mm]
+\multicolumn{2}{l}{\hspace{1cm}\textbf{Model:}} & Logit & \multicolumn{2}{l}{\textbf{Method:}} & MLE & \\[0.5mm]
+\multicolumn{2}{l}{\hspace{1cm}\textbf{No. Observations:}} & 113811 & \multicolumn{2}{l}{\textbf{Df Residuals:}} & 113807 & \\[0.5mm]
+\multicolumn{2}{l}{\hspace{1cm}\textbf{Df Model:}} & 3 & \multicolumn{2}{l}{\textbf{Pseudo R\textsuperscript{2}:}} & 0.036 & \\[0.5mm]
+\multicolumn{2}{l}{\hspace{1cm}\textbf{Log-Likelihood:}} & -10244 & \multicolumn{2}{l}{\textbf{Ll-Null:}} & -10635 & \\[0.5mm]
+\multicolumn{2}{l}{\hspace{1cm}\textbf{LLR p-value:}} & \multicolumn{5}{l}{0.00} \\\\
+\midrule\\
+& & \textbf{Odds (95\% CI)} & \textbf{Coef} & \textbf{Std Err} & \textbf{z} & \textbf{P\textless|z|} \\[1.5mm]
+\textbf{Intercept} & & \multicolumn{1}{c}{-} & -5.07 & 0.058 & -87.43 & 0.000 \\[1.5mm]
+\textbf{Gender}: & & & & & & \\
+& Female (Ref) & & & & & \\
+& Male & 3.36 (3.03, 3.71) & 1.21 & 0.05 & 23.37 & 0.000 \\
+\textbf{Ethnicity}: & & & & & & \\
+& Asian (Ref) & & & & & \\
+& White & 1.71 (1.55, 1.89) & 0.54 & 0.05 & 10.65 & 0.000 \\
+& Other & 1.21 (1.01, 1.45) & 0.19 & 0.09 & 2.16 & 0.031 \\\\
+\bottomrule
+\end{tabular}
+\end{scriptsize}
+\caption{Statistics of the logistic regression of ASD diagnosis on ethnicity and sex. The baseline or reference individual is an asian female. "White" and "Other" denote the alternative ethnicity categories from the asian baseline.}
+\label{tab:log_reg_results}
+\end{table}
+
+Table \ref{tab:log_reg_results} shows the specification and results of a
+logistic regression modelling the likelihood of ASD diagnosis as a
+function of Sex (male yes/no) and ethnicity (White yes/no, Other
+yes/no). With comparison to a baseline individual who is female and
+asian, a male is 3.36 (95\% CI 3.03, 3.71) times as likely to receive an
+ASD diagnosis, a white individual is 1.71 (95\% CI 1.55, 1.89) times as
+likely to be diagnosed, and an individual of other ethnicity is 1.21
+times (95\% CI 1.01, 1.45) as likely to be diagnosed.
+
+\hypertarget{limitations}{%
+\subsection{Limitations}\label{limitations}}
+
+This study uses an individual's primary care record to confirm both a
+diagnosis of ASD, and the time at which a diagnosis was made. ASD
+assessments are conducted by secondary care mental health services, and
+thus using primary care as the main source of data in this study, it is
+assumed that clinical records are being communicated and recorded
+accurately between these different practices.
+
+The assumption that an ASD clinical code denotes a diagnosis of ASD
+implies that the absence of an ASD code means an individual does not
+have a diagnosis. Many potential issues with the communication and
+recording of diagnoses in an individuals primary care record could
+result in diagnoses being recorded late or being absent all together.
+This would affect the reported results both for the features of the
+population diagnosed with ASD and the age at which these diagnoses
+occur. The ASD cohort and the time of diagnosis data have yet to be
+validated against the services that manage diagnoses, and so it is not
+possible to identify any such issues with the cohort used in this study.
+
+\end{document}
